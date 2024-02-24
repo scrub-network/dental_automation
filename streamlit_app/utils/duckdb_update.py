@@ -3,7 +3,6 @@ import duckdb
 import sqlalchemy
 from sqlalchemy import create_engine
 from utils.database_path import get_database_path
-from utils.brand_names import get_brand_names
 import streamlit as st
 import os
 

@@ -3,3 +3,5 @@
 /scrape_test
 
 geckodriver.log
+/__pycache__
+*.pyc
