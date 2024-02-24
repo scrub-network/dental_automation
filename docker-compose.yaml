@@ -1,0 +1,29 @@
+version: '3.3'
+
+services:
+  # Postgres
+  dental_postgres_db:
+    container_name: dental_postgres_db
+    image: postgres:latest
+    ports:
+      - '5431:5432'
+    networks:
+      - my_custom_network
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    restart: unless-stopped
+
+  # Streamlit App
+  dental_streamlit_app:
+    container_name: dental_streamlit_app
+    build: ./streamlit_app
+    ports:
+      - '8501:8501'
+    networks:
+      - my_custom_network
+    restart: on-failure
+
+networks:
+  my_custom_network:
+    external: true
