@@ -154,208 +154,160 @@ def json_to_dataframe(json_data):
 # Initialize DuckDB connection
 duckdb_conn = duckdb.connect(database=get_database_path())
 
+# Query and process job postings data
+df_job_postings = duckdb_conn.execute("SELECT * FROM job_postings").df()
+df_job_postings = df_job_postings[['job_title', 'employer', 'employer_type', 'location', 'state', 'date_posted', 'job_type', 'description', 'post_link', 'source', 'created_at']]
 
-tab1, tab2 = st.tabs(["Map View", "Upload Mapping Data"])
+# Query and get the dso_practices
+df_dso_practices = duckdb_conn.execute("SELECT * FROM dso").df()
+dso_df_original = df_dso_practices.copy()
 
-with tab1:
-    # Query and process job postings data
-    df_job_postings = duckdb_conn.execute("SELECT * FROM job_postings").df()
-    df_job_postings = df_job_postings[['job_title', 'employer', 'employer_type', 'location', 'state', 'date_posted', 'job_type', 'description', 'post_link', 'source', 'created_at']]
+# Display key metrics (assuming get_main_metrics function is defined)
+total_job_postings, total_job_postings_delta, total_job_postings_last_7_days, seven_days_ago_delta, total_unique_employers, total_unique_employers_delta = get_main_metrics(df_job_postings)
+c1, c2, c3 = st.columns(3)
+with c1: st.metric(label="Job Postings", value=total_job_postings, delta=total_job_postings_delta)
+with c2: st.metric(label="Posted Within 7 Days", value=total_job_postings_last_7_days, delta=seven_days_ago_delta)
+with c3: st.metric(label="Unique Employers", value=total_unique_employers, delta=total_unique_employers_delta)
 
-    # Query and get the dso_practices
-    df_dso_practices = duckdb_conn.execute("SELECT * FROM dso").df()
-    dso_df_original = df_dso_practices.copy()
+# Add Spacing
+st.write("# ")
 
-    # Display key metrics (assuming get_main_metrics function is defined)
-    total_job_postings, total_job_postings_delta, total_job_postings_last_7_days, seven_days_ago_delta, total_unique_employers, total_unique_employers_delta = get_main_metrics(df_job_postings)
-    c1, c2, c3 = st.columns(3)
-    with c1: st.metric(label="Job Postings", value=total_job_postings, delta=total_job_postings_delta)
-    with c2: st.metric(label="Posted Within 7 Days", value=total_job_postings_last_7_days, delta=seven_days_ago_delta)
-    with c3: st.metric(label="Unique Employers", value=total_unique_employers, delta=total_unique_employers_delta)
+# Query data from DuckDB
+existing_df = duckdb_conn.execute("SELECT * FROM regional_search_practices").df()
+original_existing_df = existing_df.copy()
+existing_df["latitude"] = existing_df["latitude"].astype(float)
+existing_df["longitude"] = existing_df["longitude"].astype(float)
 
-    # Add Spacing
-    st.write("# ")
+# Remove rows with latitude and longitude as null
+existing_df.dropna(subset=['latitude', 'longitude'], inplace=True)
 
-    # Query data from DuckDB
-    existing_df = duckdb_conn.execute("SELECT * FROM regional_search_practices").df()
-    original_existing_df = existing_df.copy()
-    existing_df["latitude"] = existing_df["latitude"].astype(float)
-    existing_df["longitude"] = existing_df["longitude"].astype(float)
+# Filtering and Processing Data for U.S. Mainland
+min_latitude, max_latitude = 24.396308, 49.384358
+min_longitude, max_longitude = -125.000000, -66.934570
 
-    # Remove rows with latitude and longitude as null
-    existing_df.dropna(subset=['latitude', 'longitude'], inplace=True)
+us_mainland_df = existing_df[
+    (existing_df['latitude'] >= min_latitude) & 
+    (existing_df['latitude'] <= max_latitude) &
+    (existing_df['longitude'] >= min_longitude) & 
+    (existing_df['longitude'] <= max_longitude)
+]
 
-    # Filtering and Processing Data for U.S. Mainland
-    min_latitude, max_latitude = 24.396308, 49.384358
-    min_longitude, max_longitude = -125.000000, -66.934570
+# Date Processing
+today_date = pd.to_datetime('today').normalize() - pd.Timedelta(days=1)
+us_mainland_df['created_at_dt'] = pd.to_datetime(us_mainland_df['created_at'])
+us_mainland_df['created_at_days'] = (today_date - us_mainland_df['created_at_dt']).dt.days
+us_mainland_df['normalized_days'] = us_mainland_df['created_at_days'] / us_mainland_df['created_at_days'].max()
 
-    us_mainland_df = existing_df[
-        (existing_df['latitude'] >= min_latitude) & 
-        (existing_df['latitude'] <= max_latitude) &
-        (existing_df['longitude'] >= min_longitude) & 
-        (existing_df['longitude'] <= max_longitude)
-    ]
+# User Input
+user_location = st.text_input("Enter your address or zip code:")
+user_lat, user_lon = geocode_locations_using_google(user_location)
 
-    # Date Processing
-    today_date = pd.to_datetime('today').normalize() - pd.Timedelta(days=1)
-    us_mainland_df['created_at_dt'] = pd.to_datetime(us_mainland_df['created_at'])
-    us_mainland_df['created_at_days'] = (today_date - us_mainland_df['created_at_dt']).dt.days
-    us_mainland_df['normalized_days'] = us_mainland_df['created_at_days'] / us_mainland_df['created_at_days'].max()
+# Radius Selection
+radius_selected = st.slider("Select a radius (in miles)", min_value=0, max_value=100, value=5, step=1, key="radius")
 
-    # User Input
-    user_location = st.text_input("Enter your address or zip code:")
-    user_lat, user_lon = geocode_locations_using_google(user_location)
+if user_lat is not None and user_lon is not None:
+    us_mainland_df['distance_from_user'] = us_mainland_df.apply(
+        lambda row: calculate_distance(row, user_lat, user_lon), axis=1
+    )
+    us_mainland_df = us_mainland_df[us_mainland_df['distance_from_user'] <= radius_selected]
+    zoom = 13
+else:
+    zoom = 4.4
 
-    # Radius Selection
-    radius_selected = st.slider("Select a radius (in miles)", min_value=0, max_value=100, value=5, step=1, key="radius")
+# Displaying Nearby Practices
+us_mainland_df['color'] = us_mainland_df['normalized_days'].apply(color_scale).astype(str)
 
-    if user_lat is not None and user_lon is not None:
-        us_mainland_df['distance_from_user'] = us_mainland_df.apply(
-            lambda row: calculate_distance(row, user_lat, user_lon), axis=1
-        )
-        us_mainland_df = us_mainland_df[us_mainland_df['distance_from_user'] <= radius_selected]
-        zoom = 13
+# Clean up us_mainland_df
+# join on place_id
+df_dso_practices = df_dso_practices[['place_id', 'dso', 'phone', 'latitude', 'longitude', "name", "full_address", "site", "rating", "reviews", "location_link", "business_status"]]
+df_dso_practices.columns = ['place_id', 'dso', 'phone_number', 'latitude', 'longitude', "name", "address", "website", "rating", "total_ratings", "google_maps_url", "business_status"]
+
+# Change from float64 to object
+df_dso_practices['latitude'] = df_dso_practices['latitude'].astype(float)
+df_dso_practices['longitude'] = df_dso_practices['longitude'].astype(float)
+
+us_mainland_df = us_mainland_df.merge(df_dso_practices[['place_id', 'dso']], on='place_id', how='left')
+us_mainland_df = us_mainland_df.merge(df_dso_practices[['phone_number', 'dso']], how='left', on='phone_number')
+us_mainland_df = us_mainland_df.merge(df_dso_practices[['latitude', 'longitude', 'dso']], how='left', on=['latitude', 'longitude'])
+
+# Combine dso_x and dso_y
+us_mainland_df['dso_x'] = us_mainland_df['dso_x'].fillna(us_mainland_df['dso_y'])
+us_mainland_df['dso'] = us_mainland_df['dso_x'].fillna(us_mainland_df['dso_y'])
+us_mainland_df.drop(columns=['dso_x', 'dso_y'], inplace=True)
+us_mainland_df = us_mainland_df[['place_id', 'name', 'address', 'phone_number', 'website', 'rating', 'total_ratings', 'google_maps_url', 'business_status', 'dso', 'latitude', 'longitude', 'color']]
+
+# Join the rest of the df_dso_practices that don't overlap with us_mainland_df
+df_dso_practices = df_dso_practices[~df_dso_practices['place_id'].isin(us_mainland_df['place_id'].tolist())]
+df_dso_practices = df_dso_practices[~df_dso_practices['phone_number'].isin(us_mainland_df['phone_number'].tolist())]
+df_dso_practices = df_dso_practices[["place_id", "name", "address", "phone_number", "website", "rating", "total_ratings", "google_maps_url", "business_status", "dso", "latitude", "longitude"]]
+df_dso_practices["color"] = None
+
+us_mainland_df = pd.concat([us_mainland_df, df_dso_practices], ignore_index=True)
+
+# us_mainland_df = pd.concat([us_mainland_df, df_dso_practices], ignore_index=True)
+
+map_df = us_mainland_df[['latitude', 'longitude', 'color']]
+map_df.reset_index(drop=True, inplace=True)
+
+average_latitude = map_df['latitude'].dropna().mean()
+average_longitude = map_df['longitude'].dropna().mean()
+
+# Generate new color for each unique dso
+def color_chooser(name, address, category):
+    if type(category) != float and category is not None:
+        return 'blue'
     else:
-        zoom = 4.4
+        return 'red'
 
-    # Displaying Nearby Practices
-    us_mainland_df['color'] = us_mainland_df['normalized_days'].apply(color_scale).astype(str)
+try:
+    folium_map = Map(location=[average_latitude, average_longitude], zoom_start=zoom)
+except ValueError:
+    average_latitude = user_lat
+    average_longitude = user_lon
+    folium_map = Map(location=[average_latitude, average_longitude], zoom_start=zoom)
 
-    # Clean up us_mainland_df
-    # join on place_id
-    df_dso_practices = df_dso_practices[['place_id', 'dso', 'phone', 'latitude', 'longitude']]
-    df_dso_practices.columns = ['place_id', 'dso', 'phone_number', 'latitude', 'longitude']
+for index, row in us_mainland_df.iterrows():
+    custom_popup = create_custom_popup(row['name'], row['address'], row['phone_number'], row['website'],
+                                        row['rating'], row['total_ratings'], row['google_maps_url'],
+                                        row['business_status'], row['dso'])
 
-    # Change from float64 to object
-    df_dso_practices['latitude'] = df_dso_practices['latitude'].astype(float)
-    df_dso_practices['longitude'] = df_dso_practices['longitude'].astype(float)
-    
-    us_mainland_df = us_mainland_df.merge(df_dso_practices[['place_id', 'dso']], on='place_id', how='left')
-    us_mainland_df = us_mainland_df.merge(df_dso_practices[['phone_number', 'dso']], how='left', on='phone_number')
-    us_mainland_df = us_mainland_df.merge(df_dso_practices[['latitude', 'longitude', 'dso']], how='left', on=['latitude', 'longitude'])
+    Marker(
+        location=[row['latitude'], row['longitude']],
+        popup=custom_popup,
+        icon=Icon(color=color_chooser(row['name'], row['address'], row['dso']))
+        # icon=Icon(color=row['color'])  # Assuming 'color' is defined in your DataFrame
+    ).add_to(folium_map)
 
-    # Combine dso_x and dso_y
-    us_mainland_df['dso_x'] = us_mainland_df['dso_x'].fillna(us_mainland_df['dso_y'])
-    us_mainland_df['dso'] = us_mainland_df['dso_x'].fillna(us_mainland_df['dso_y'])
-    us_mainland_df.drop(columns=['dso_x', 'dso_y'], inplace=True)
+# Display the map in Streamlit
+streamlit_folium.folium_static(folium_map, width=1000, height=500)
 
-    # Join the rest of the df_dso_practices that don't overlap with us_mainland_df
-    df_dso_practices = df_dso_practices[~df_dso_practices['place_id'].isin(us_mainland_df['place_id'].tolist())]
-    df_dso_practices = df_dso_practices[~df_dso_practices['phone_number'].isin(us_mainland_df['phone_number'].tolist())]
+with st.expander("View Nearby Practices"):
+    us_mainland_df.reset_index(drop=True, inplace=True)
+    st.data_editor(us_mainland_df)
 
-    map_df = us_mainland_df[['latitude', 'longitude', 'color']]
-    map_df.reset_index(drop=True, inplace=True)
+generate_button = st.button("Generate", type="primary")
+if generate_button and user_lat is not None and user_lon is not None:
+    inputted_loc = f"{user_lat},{user_lon}"
+    api_key = 'AIzaSyA3gUG6-zGHiznAC6IJU6VUurMuajj8E2M'
+    json = find_dental_practices_with_details(api_key, inputted_loc, radius_selected * 1609.34, existing_df['place_id'].tolist())
+    st.dataframe(json)
+    df = json_to_dataframe(json)
 
-    # st.map(map_df, zoom=5, color='color')
-    average_latitude = map_df['latitude'].dropna().mean()
-    average_longitude = map_df['longitude'].dropna().mean()
+    # Check if the values exist in the database by name and address. If not, add them to the database.
+    name_address_tuples = [(name, address, google_maps_url) for name, address, google_maps_url in zip(df['name'], df['address'], df['google_maps_url'])]
+    existing_name_address_tuples = [(name, address, google_maps_url) for name, address, google_maps_url in zip(original_existing_df['name'], original_existing_df['address'], original_existing_df['google_maps_url'])]
 
-    # Generate new color for each unique dso
-    def color_chooser(name, address, category):
-        if type(category) != float and category is not None:
-            return 'blue'
-        else:
-            return 'red'
+    new_practices = df[~df[['name', 'address']].apply(tuple, axis=1).isin(existing_name_address_tuples)]
 
-    try:
-        folium_map = Map(location=[average_latitude, average_longitude], zoom_start=zoom)
-    except ValueError:
-        average_latitude = user_lat
-        average_longitude = user_lon
-        folium_map = Map(location=[average_latitude, average_longitude], zoom_start=zoom)
+    # Add created_at and updated_at
+    now_datetime = pd.to_datetime('now')
+    new_practices['created_at'] = now_datetime
+    new_practices['updated_at'] = now_datetime
 
-    for index, row in us_mainland_df.iterrows():
-        custom_popup = create_custom_popup(row['name'], row['address'], row['phone_number'], row['website'],
-                                            row['rating'], row['total_ratings'], row['google_maps_url'],
-                                            row['business_status'], row['dso'])
-        Marker(
-            location=[row['latitude'], row['longitude']],
-            popup=custom_popup,
-            icon=Icon(color=color_chooser(row['name'], row['address'], row['dso']))
-            # icon=Icon(color=row['color'])  # Assuming 'color' is defined in your DataFrame
-        ).add_to(folium_map)
+    engine = create_engine(get_source_database_url())
+    new_practices.to_sql('regional_search_practices', schema="dental_practices", con=engine, if_exists='append', index=False)
 
-    # Display the map in Streamlit
-    streamlit_folium.folium_static(folium_map, width=1000, height=500)
-
-    with st.expander("View Nearby Practices"):
-        us_mainland_df.reset_index(drop=True, inplace=True)
-        st.data_editor(us_mainland_df)
-
-    generate_button = st.button("Generate", type="primary")
-    if generate_button and user_lat is not None and user_lon is not None:
-        inputted_loc = f"{user_lat},{user_lon}"
-        api_key = 'AIzaSyA3gUG6-zGHiznAC6IJU6VUurMuajj8E2M'
-        json = find_dental_practices_with_details(api_key, inputted_loc, radius_selected * 1609.34, existing_df['place_id'].tolist())
-        st.dataframe(json)
-        df = json_to_dataframe(json)
-
-        # Check if the values exist in the database by name and address. If not, add them to the database.
-        name_address_tuples = [(name, address, google_maps_url) for name, address, google_maps_url in zip(df['name'], df['address'], df['google_maps_url'])]
-        existing_name_address_tuples = [(name, address, google_maps_url) for name, address, google_maps_url in zip(original_existing_df['name'], original_existing_df['address'], original_existing_df['google_maps_url'])]
-
-        new_practices = df[~df[['name', 'address']].apply(tuple, axis=1).isin(existing_name_address_tuples)]
-
-        # Add created_at and updated_at
-        now_datetime = pd.to_datetime('now')
-        new_practices['created_at'] = now_datetime
-        new_practices['updated_at'] = now_datetime
-
-        engine = create_engine(get_source_database_url())
-        new_practices["dso"] = None
-        new_practices.to_sql('regional_search_practices', schema="dental_practices", con=engine, if_exists='append', index=False)
-
-        run_duckdb_updates(manual_trigger=True)
-        st.balloons()
-    elif generate_button and (user_lat is None or user_lon is None):
-        st.error("Please enter a valid address or zip code.")
-
-
-with tab2:
-    # Pull existing data
-    uncleaned_dso_df = duckdb_conn.execute("SELECT * FROM dso_practices").df()
-    uncleaned_dso_df["query"] = uncleaned_dso_df["name"] + " , " + uncleaned_dso_df["address"]
-    cleaned_dso_df = duckdb_conn.execute("SELECT * FROM dso").df()
-
-    # Display Uncleaned DSO
-    display_uncleaned = uncleaned_dso_df[~uncleaned_dso_df["query"].isin(cleaned_dso_df["query"].tolist())]
-    st.write("## Unmapped DSO Data\n---")
-    st.write("**Total Count**: ", len(display_uncleaned))
-    st.data_editor(display_uncleaned)
-
-    st.write("# ")
-
-    f = st.file_uploader("Upload a new batch of DSO Data", type=["csv"])
-    if f is not None:
-        df = pd.read_csv(f)
-
-        # Column names: place_id, query, name, site, phone, street, city, postal_code, state, latitude, longitude, rating, reviews, 
-        column_names = ["place_id", "query", "name", "site", "phone", "street", "city", "postal_code", "state", "latitude", "longitude", "rating", "reviews"]
-        for col in column_names:
-            if col not in df.columns:
-                column_names.remove(col)
-
-        df = df[column_names]
-
-        # Merge df and uncleaned_dso_df
-        st.write(len(df))
-        merged_df = df.merge(uncleaned_dso_df[["query", "dso"]], on="query")
-        st.write(len(merged_df))
-        merged_df = merged_df[~merged_df["place_id"].isin(cleaned_dso_df["place_id"].tolist())]
-        numer_of_duplicates = len(merged_df[merged_df.duplicated(subset=["place_id"], keep=False)])
-        merged_df.drop_duplicates(inplace=True)
-        merged_df.reset_index(drop=True, inplace=True)
-        already_existing = len(merged_df[merged_df["place_id"].isin(cleaned_dso_df["place_id"].tolist())])
-        st.write("**Total Rows Inputted**: ",
-                 len(df),
-                 f"\n- Excludes rows that are already in the database:",
-                 already_existing,
-                 "\n- Excludes that are umatched with the scraped dso data: ", len(df) - len(merged_df) - numer_of_duplicates,
-                 "\n- Excludes duplicates: ", numer_of_duplicates)
-        st.write("**✨ Total Rows after cleaned**: ", len(merged_df))
-        st.data_editor(merged_df)
-
-        if st.button("Upload Above Data", type="primary"):
-            engine = create_engine(get_source_database_url())
-            merged_df.to_sql('dso', schema="dental_practices", con=engine, if_exists='append', index=False)
-            st.balloons()
+    run_duckdb_updates(manual_trigger=True)
+    st.balloons()
+elif generate_button and (user_lat is None or user_lon is None):
+    st.error("Please enter a valid address or zip code.")

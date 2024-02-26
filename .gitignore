@@ -1,7 +1,11 @@
+# Local Testing Folders
 /compensation_dashboard
 /cron_automation
 /scrape_test
+/selenium_scrape
 
-geckodriver.log
+# Unnecesary files
 /__pycache__
+/streamlit_app/utils/__pycache__
 *.pyc
+geckodriver.log
