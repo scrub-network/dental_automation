@@ -1,9 +1,11 @@
 import googlemaps
+import streamlit as st
 
 def geocode_locations_using_google(df):
 
     # Initialize the Google Maps client
-    gmaps = googlemaps.Client(key='AIzaSyA3gUG6-zGHiznAC6IJU6VUurMuajj8E2M')
+    google_api_key = st.secrets["google_api_key"]
+    gmaps = googlemaps.Client(key=google_api_key)
     # Check if the input is a single string (user's address or zip code)
     if isinstance(df, str):
         try:

@@ -288,7 +288,7 @@ with st.expander("View Nearby Practices"):
 generate_button = st.button("Generate", type="primary")
 if generate_button and user_lat is not None and user_lon is not None:
     inputted_loc = f"{user_lat},{user_lon}"
-    api_key = 'AIzaSyA3gUG6-zGHiznAC6IJU6VUurMuajj8E2M'
+    api_key = st.secrets["google_maps_api_key"]
     json = find_dental_practices_with_details(api_key, inputted_loc, radius_selected * 1609.34, existing_df['place_id'].tolist())
     st.dataframe(json)
     df = json_to_dataframe(json)

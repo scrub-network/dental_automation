@@ -8,6 +8,7 @@ from utils.us_states_mapping import get_full_state_name
 from datetime import datetime
 from sqlalchemy import create_engine
 import requests
+import streamlit as st
 
 class DentalPost:
     def __init__(self):
@@ -53,7 +54,7 @@ class DentalPost:
 
     def extract_company_name(self, job_description):
 
-        openai.api_key = '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'
+        openai.api_key = st.secrets["openai_api_key"]
 
         # Create the prompt
         prompt = f"From the following job description, please extract and provide the name of the company:\n{job_description}"
