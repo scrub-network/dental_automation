@@ -10,7 +10,8 @@ def get_source_database_url():
     # Database credentials for the source database
     cwd = os.getcwd()
     if 'Volume' in cwd:
-        return "postgresql://postgres:postgres@199.241.139.206:5431/dental_jobs"
+        db_uri = st.secrets["db_uri"]
+        return db_uri
     else:
         return "postgresql://postgres:postgres@dental_postgres_db:5432/dental_jobs"
 
