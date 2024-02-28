@@ -1,10 +1,7 @@
 import pandas as pd
 import numpy as np
 import streamlit as st
-import duckdb
-from sqlalchemy import create_engine
-from utils.duckdb_update import get_source_database_url, run_duckdb_updates
-from utils.database_path import get_database_path
+from sqlalchemy import create_engine, text
 from utils.geomaps_api import geocode_locations_using_google
 from utils.clean_description import clean_and_format_text
 from utils.metrics import get_main_metrics
@@ -151,15 +148,18 @@ def json_to_dataframe(json_data):
         data.append(row)
     return pd.DataFrame(data, columns=column_names)
 
-# Initialize DuckDB connection
-duckdb_conn = duckdb.connect(database=get_database_path())
+# Initialize connection
+db_uri = st.secrets["db_uri"]
+engine = create_engine(db_uri)
 
 # Query and process job postings data
-df_job_postings = duckdb_conn.execute("SELECT * FROM job_postings").df()
+job_posting_sql = text("SELECT * FROM public.job_postings")
+df_job_postings = pd.read_sql(job_posting_sql, engine)
 df_job_postings = df_job_postings[['job_title', 'employer', 'employer_type', 'location', 'state', 'date_posted', 'job_type', 'description', 'post_link', 'source', 'created_at']]
 
 # Query and get the dso_practices
-df_dso_practices = duckdb_conn.execute("SELECT * FROM dso").df()
+dso_sql = text("SELECT * FROM dental_practices.dso")
+df_dso_practices = pd.read_sql(dso_sql, engine)
 dso_df_original = df_dso_practices.copy()
 
 # Display key metrics (assuming get_main_metrics function is defined)
@@ -172,8 +172,9 @@ with c3: st.metric(label="Unique Employers", value=total_unique_employers, delta
 # Add Spacing
 st.write("# ")
 
-# Query data from DuckDB
-existing_df = duckdb_conn.execute("SELECT * FROM regional_search_practices").df()
+# Query data
+regional_search_sql = text("SELECT * FROM dental_practices.regional_search_practices")
+existing_df = pd.read_sql(regional_search_sql, engine)
 original_existing_df = existing_df.copy()
 existing_df["latitude"] = existing_df["latitude"].astype(float)
 existing_df["longitude"] = existing_df["longitude"].astype(float)
@@ -306,8 +307,6 @@ if generate_button and user_lat is not None and user_lon is not None:
 
     engine = create_engine(get_source_database_url())
     new_practices.to_sql('regional_search_practices', schema="dental_practices", con=engine, if_exists='append', index=False)
-
-    run_duckdb_updates(manual_trigger=True)
     st.balloons()
 elif generate_button and (user_lat is None or user_lon is None):
     st.error("Please enter a valid address or zip code.")

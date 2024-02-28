@@ -1,9 +1,7 @@
 import pandas as pd
 import streamlit as st
-import duckdb
+from sqlalchemy import create_engine, text
 from utils.metrics import get_main_metrics
-from utils.duckdb_update import run_duckdb_updates
-from utils.database_path import get_database_path
 
 st.set_page_config(
     page_title="Dental Job Board",
@@ -13,11 +11,13 @@ st.set_page_config(
 
 st.title("Scrub Network")
 
-# Initialize DuckDB connection
-duckdb_conn = duckdb.connect(database=get_database_path())
+# Initialize connection
+db_uri = st.secrets["db_uri"]
+engine = create_engine(db_uri)
 
-# Query data from DuckDB
-df = duckdb_conn.execute("SELECT * FROM job_postings").df()
+# Query data from Data
+job_posting_sql = text("SELECT * FROM public.job_postings")
+df = pd.read_sql(job_posting_sql, engine)
 df = df[['job_title', 'employer', 'location', 'state', 'date_posted', 'job_type', 'description', 'post_link', 'source', 'created_at']]
 
 metric_1, metric_1_delta, metric_2, metric_2_delta, metric_3, metric_3_delta = get_main_metrics(df)
@@ -33,7 +33,3 @@ with c3:
     st.metric(label="**Unique Employers**", value=metric_3, delta=metric_3_delta)
 
 st.write("# ")
-
-if st.button("Get Most Updated Data"):
-    run_duckdb_updates(manual_trigger=True)
-    st.balloons()

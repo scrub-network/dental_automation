@@ -1,9 +1,6 @@
 import pandas as pd
 from sqlalchemy import create_engine, text
 import streamlit as st
-import duckdb
-from utils.duckdb_update import run_duckdb_updates, get_duckdb_connection
-from utils.database_path import get_database_path
 
 st.set_page_config(
     page_title="DSO",
@@ -14,11 +11,13 @@ st.set_page_config(
 
 st.title("🏘️ DSO")
 
-# Initialize DuckDB connection
-duckdb_conn = duckdb.connect(database=get_database_path())
+# Initialize connection
+db_uri = st.secrets["db_uri"]
+engine = create_engine(db_uri)
 
-# Query data from DuckDB
-dso_df = duckdb_conn.execute("SELECT * FROM dso_practices").df()
+# Query data from
+dso_practices_sql = text("SELECT * FROM dso_scraping.dso_practices")
+dso_df = pd.read_sql(dso_practices_sql, engine)
 
 total_dso_practice = dso_df.shape[0]
 total_dso_count = dso_df["dso"].nunique()

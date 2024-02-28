@@ -1,9 +1,6 @@
 import pandas as pd
 from sqlalchemy import create_engine, text
 import streamlit as st
-import duckdb
-from utils.duckdb_update import run_duckdb_updates, get_duckdb_connection
-from utils.database_path import get_database_path
 
 st.set_page_config(
     page_title="New Mapping",
@@ -14,12 +11,16 @@ st.set_page_config(
 
 st.title("🔐 New Mapping")
 
-# Initialize DuckDB connection
-duckdb_conn = duckdb.connect(database=get_database_path())
+# Initialize connection
+db_uri = st.secrets["db_uri"]
+engine = create_engine(db_uri)
 
-# Query data from DuckDB
-mapping_df = duckdb_conn.execute("SELECT * FROM job_title_mapping").df()
-dso_df = duckdb_conn.execute("SELECT * FROM dso_mapping").df()
+# Query data
+sql = text("SELECT * FROM dental_mapping.job_title_mapping")
+mapping_df = pd.read_sql(sql, engine)
+
+dso_mapping_sql = text("SELECT * FROM dental_mapping.dso_mapping")
+dso_df = pd.read_sql(dso_mapping_sql, engine)
 
 tab1, tab2 = st.tabs(["Word Mapping", "DSO Mapping"])
 

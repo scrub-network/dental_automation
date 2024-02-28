@@ -1,10 +1,12 @@
 import pandas as pd
-from utils.database_path import get_database_path
-import duckdb
+from sqlalchemy import create_engine, text
+import streamlit as st
 
 def get_brand_names():
-    duckdb_conn = duckdb.connect(database=get_database_path())
-    existing_df = duckdb_conn.execute("SELECT * FROM dso_practices").df()
+    db_uri = st.secrets["db_uri"]
+    engine = create_engine(db_uri)
+    dso_practices_sql = text("SELECT * FROM dso_scraping.dso_practices")
+    existing_df = pd.read_sql(dso_practices_sql, engine)
 
     def manual_adds():
         brand_name_dic = {"brand": ['All Smiles', 'Acworth Center for Family Dentistry',

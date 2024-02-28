@@ -1,9 +1,8 @@
 import streamlit as st
 import pandas as pd
-import duckdb
+from sqlalchemy import create_engine, text
 from utils.dataframe_filters import add_filters_to_dataframe
 from utils.metrics import get_main_metrics
-from utils.database_path import get_database_path
 
 st.set_page_config(
     page_title="Job Postings",
@@ -14,11 +13,12 @@ st.set_page_config(
 
 st.title("📋 Job Postings Raw Data")
 
-# Initialize DuckDB connection
-duckdb_conn = duckdb.connect(database=get_database_path())
+# Initialize connection
+db_uri = st.secrets["db_uri"]
+engine = create_engine(db_uri)
 
-# Query data from DuckDB
-df = duckdb_conn.execute("SELECT * FROM job_postings").df()
+job_posting_sql = text("SELECT * FROM public.job_postings")
+df = pd.read_sql(job_posting_sql, engine)
 df = df[['job_title', 'employer', 'employer_type', 'location', 'state', 'date_posted', 'job_type', 'description', 'post_link', 'source', 'created_at']]
 
 total_job_postings, total_job_postings_delta, total_job_postings_last_7_days, seven_days_ago_delta, total_unique_employers, total_unique_employers_delta = get_main_metrics(df)

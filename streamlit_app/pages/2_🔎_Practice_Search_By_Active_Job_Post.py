@@ -1,10 +1,7 @@
 import pandas as pd
 import numpy as np
 import streamlit as st
-import duckdb
-from sqlalchemy import create_engine
-from utils.duckdb_update import get_source_database_url, run_duckdb_updates
-from utils.database_path import get_database_path
+from sqlalchemy import create_engine, text
 from utils.geomaps_api import geocode_locations_using_google
 from utils.clean_description import clean_and_format_text
 from utils.metrics import get_main_metrics
@@ -81,10 +78,11 @@ def create_custom_popup(job_title, employer, date_posted, address, website, phon
     iframe = IFrame(html_content, width=width, height=height)
     return Popup(iframe, max_width=width)
 
-# Initialize DuckDB connection
-duckdb_conn = duckdb.connect(database=get_database_path())
+# Initialize connection
+db_uri = st.secrets["db_uri"]
+con = create_engine(db_uri)
 
-df = duckdb_conn.execute("SELECT * FROM job_postings").df()
+df = con.execute("SELECT * FROM job_postings").df()
 df = df[['job_title', 'employer', 'employer_type', 'location', 'state', 'date_posted', 'job_type', 'description', 'post_link', 'source', 'created_at']]
 
 total_job_postings, total_job_postings_delta, total_job_postings_last_7_days, seven_days_ago_delta, total_unique_employers, total_unique_employers_delta = get_main_metrics(df)
@@ -102,8 +100,8 @@ with c3:
 # Add Spacing
 st.write("# ")
 
-# Query data from DuckDB
-existing_df = duckdb_conn.execute("SELECT * FROM source_private_practices").df()
+sql = text("SELECT * FROM source.source_private_practices")
+existing_df = pd.read_sql(sql, con)
 existing_df["latitude"] = existing_df["latitude"].astype(float)
 existing_df["longitude"] = existing_df["longitude"].astype(float)
 
