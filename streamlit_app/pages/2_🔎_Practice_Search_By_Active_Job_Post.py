@@ -100,82 +100,86 @@ with c3:
 # Add Spacing
 st.write("# ")
 
-sql = text("SELECT * FROM source.source_private_practices")
-existing_df = pd.read_sql(sql, con)
-existing_df["latitude"] = existing_df["latitude"].astype(float)
-existing_df["longitude"] = existing_df["longitude"].astype(float)
+tab1, tab2 = st.tabs(["Main", "Statistics"])
+with tab1:
+    sql = text("SELECT * FROM source.source_private_practices")
+    existing_df = pd.read_sql(sql, con)
+    existing_df["latitude"] = existing_df["latitude"].astype(float)
+    existing_df["longitude"] = existing_df["longitude"].astype(float)
 
-# Remove rows with latitude and longitude as null
-existing_df.dropna(subset=['latitude', 'longitude'], inplace=True)
+    # Remove rows with latitude and longitude as null
+    existing_df.dropna(subset=['latitude', 'longitude'], inplace=True)
 
-# Filtering and Processing Data for U.S. Mainland
-min_latitude, max_latitude = 24.396308, 49.384358
-min_longitude, max_longitude = -125.000000, -66.934570
+    # Filtering and Processing Data for U.S. Mainland
+    min_latitude, max_latitude = 24.396308, 49.384358
+    min_longitude, max_longitude = -125.000000, -66.934570
 
-us_mainland_df = existing_df[
-    (existing_df['latitude'] >= min_latitude) & 
-    (existing_df['latitude'] <= max_latitude) &
-    (existing_df['longitude'] >= min_longitude) & 
-    (existing_df['longitude'] <= max_longitude)
-]
+    us_mainland_df = existing_df[
+        (existing_df['latitude'] >= min_latitude) & 
+        (existing_df['latitude'] <= max_latitude) &
+        (existing_df['longitude'] >= min_longitude) & 
+        (existing_df['longitude'] <= max_longitude)
+    ]
 
-# Date Processing
-today_date = pd.to_datetime('today').normalize()
-us_mainland_df['date_posted_dt'] = pd.to_datetime(us_mainland_df['date_posted'])
-us_mainland_df['date_posted_days'] = (today_date - us_mainland_df['date_posted_dt']).dt.days
-us_mainland_df['normalized_days'] = us_mainland_df['date_posted_days'] / us_mainland_df['date_posted_days'].max()
+    # Date Processing
+    today_date = pd.to_datetime('today').normalize()
+    us_mainland_df['date_posted_dt'] = pd.to_datetime(us_mainland_df['date_posted'])
+    us_mainland_df['date_posted_days'] = (today_date - us_mainland_df['date_posted_dt']).dt.days
+    us_mainland_df['normalized_days'] = us_mainland_df['date_posted_days'] / us_mainland_df['date_posted_days'].max()
 
-# User Input
-user_location = st.text_input("Enter your address or zip code:")
+    # User Input
+    user_location = st.text_input("Enter your address or zip code:")
 
-if user_location:
-    # Radius Selection
-    radius_selected = st.slider("Select a radius (in miles)", min_value=0, max_value=100, value=100, step=5, key="radius")
+    if user_location:
+        # Radius Selection
+        radius_selected = st.slider("Select a radius (in miles)", min_value=0, max_value=100, value=100, step=5, key="radius")
 
-    user_lat, user_lon = geocode_locations_using_google(user_location)
-    us_mainland_df['distance_from_user'] = us_mainland_df.apply(
-        lambda row: calculate_distance(row, user_lat, user_lon), axis=1
-    )
-    us_mainland_df = us_mainland_df[us_mainland_df['distance_from_user'] <= radius_selected]
+        user_lat, user_lon = geocode_locations_using_google(user_location)
+        us_mainland_df['distance_from_user'] = us_mainland_df.apply(
+            lambda row: calculate_distance(row, user_lat, user_lon), axis=1
+        )
+        us_mainland_df = us_mainland_df[us_mainland_df['distance_from_user'] <= radius_selected]
 
-    # Displaying Nearby Practices
-    us_mainland_df['color'] = us_mainland_df['normalized_days'].apply(color_scale).astype(str)
+        # Displaying Nearby Practices
+        us_mainland_df['color'] = us_mainland_df['normalized_days'].apply(color_scale).astype(str)
 
-    # Clean up us_mainland_df
-    map_df = us_mainland_df[['latitude', 'longitude', 'color']]
-    map_df.reset_index(drop=True, inplace=True)
+        # Clean up us_mainland_df
+        map_df = us_mainland_df[['latitude', 'longitude', 'color']]
+        map_df.reset_index(drop=True, inplace=True)
 
-    # st.map(map_df, zoom=5, color='color')
-    average_latitude = map_df['latitude'].dropna().mean()
-    average_longitude = map_df['longitude'].dropna().mean()
-    folium_map = Map(location=[average_latitude, average_longitude], zoom_start=6)
+        # st.map(map_df, zoom=5, color='color')
+        average_latitude = map_df['latitude'].dropna().mean()
+        average_longitude = map_df['longitude'].dropna().mean()
+        folium_map = Map(location=[average_latitude, average_longitude], zoom_start=6)
 
-    for index, row in us_mainland_df.iterrows():
-        custom_popup = create_custom_popup(row['job_title'], row['employer'], row['date_posted'], row['actual_address'],
-                                           row['website'], row['phone_number'], row['email_address'])
-        Marker(
-            location=[row['latitude'], row['longitude']],
-            popup=custom_popup,
-            icon=Icon(color=row['color'])
-        ).add_to(folium_map)
+        for index, row in us_mainland_df.iterrows():
+            custom_popup = create_custom_popup(row['job_title'], row['employer'], row['date_posted'], row['actual_address'],
+                                            row['website'], row['phone_number'], row['email_address'])
+            Marker(
+                location=[row['latitude'], row['longitude']],
+                popup=custom_popup,
+                icon=Icon(color=row['color'])
+            ).add_to(folium_map)
 
-    # Display the map in Streamlit
-    streamlit_folium.folium_static(folium_map, width=1000, height=500)
+        # Display the map in Streamlit
+        streamlit_folium.folium_static(folium_map, width=1000, height=500)
 
-    st.write("Map showing posts with dates. Darker green indicates more recent posts, and lighter green indicates older posts.")
-    us_mainland_df = us_mainland_df[['job_title', 'employer', 'location', 'date_posted', 'job_type', 'description', 'days_of_week', 'post_link', 'source', 'actual_address', 'phone_number', 'email_address', 'created_at']]
-    # st.data_editor(us_mainland_df, num_rows="dynamic", hide_index=True)
-    # Order by date_posted
-    us_mainland_df = us_mainland_df.sort_values(by=['date_posted'], ascending=False)
-    job_posting_containers(us_mainland_df)
+        st.write("Map showing posts with dates. Darker green indicates more recent posts, and lighter green indicates older posts.")
+        us_mainland_df = us_mainland_df[['job_title', 'employer', 'location', 'date_posted', 'job_type', 'description', 'days_of_week', 'post_link', 'source', 'actual_address', 'phone_number', 'email_address', 'created_at']]
+        # st.data_editor(us_mainland_df, num_rows="dynamic", hide_index=True)
+        # Order by date_posted
+        us_mainland_df = us_mainland_df.sort_values(by=['date_posted'], ascending=False)
+        job_posting_containers(us_mainland_df)
 
-else:
-    us_mainland_df['color'] = us_mainland_df['normalized_days'].apply(color_scale)
-    st.map(us_mainland_df, zoom=3.5, color='color')
-    st.write("Map showing posts with dates. Darker green indicates more recent posts, and lighter green indicates older posts.")
-    us_mainland_df = us_mainland_df[['job_title', 'employer', 'location', 'state', 'date_posted', 'job_type', 'description', 'days_of_week', 'post_link', 'source', 'actual_address', 'phone_number', 'email_address', 'created_at']]
-    # st.data_editor(us_mainland_df, num_rows="dynamic", hide_index=True)
-    # Order by date_posted
-    us_mainland_df = us_mainland_df.sort_values(by=['date_posted'], ascending=False)
-    job_posting_containers(us_mainland_df)
+    else:
+        us_mainland_df['color'] = us_mainland_df['normalized_days'].apply(color_scale)
+        st.map(us_mainland_df, zoom=3.5, color='color')
+        st.write("Map showing posts with dates. Darker green indicates more recent posts, and lighter green indicates older posts.")
+        us_mainland_df = us_mainland_df[['job_title', 'employer', 'location', 'state', 'date_posted', 'job_type', 'description', 'days_of_week', 'post_link', 'source', 'actual_address', 'phone_number', 'email_address', 'created_at']]
+        # st.data_editor(us_mainland_df, num_rows="dynamic", hide_index=True)
+        # Order by date_posted
+        us_mainland_df = us_mainland_df.sort_values(by=['date_posted'], ascending=False)
+        job_posting_containers(us_mainland_df)
 
+with tab2:
+    st.data_editor(df, num_rows="dynamic", hide_index=True)

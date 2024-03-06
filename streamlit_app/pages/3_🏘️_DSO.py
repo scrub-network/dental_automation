@@ -26,6 +26,9 @@ c1, c2, c3, c4, c5 = st.columns(5)
 with c2: st.metric(label="DSO Count", value=total_dso_count)
 with c4: st.metric(label="DSO Practice Count", value=total_dso_practice)
 
+st.write("# ")
+st.write("### DSO Practice Count Summary")
+
 # Total count by dso
 dso_count_df = dso_df.groupby("dso").agg({"name": "count"}).reset_index()
 dso_count_df = dso_count_df.rename(columns={"name": "count"})

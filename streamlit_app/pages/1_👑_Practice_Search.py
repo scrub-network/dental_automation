@@ -206,15 +206,6 @@ user_lat, user_lon = geocode_locations_using_google(user_location)
 # Radius Selection
 radius_selected = st.slider("Select a radius (in miles)", min_value=0, max_value=100, value=5, step=1, key="radius")
 
-if user_lat is not None and user_lon is not None:
-    us_mainland_df['distance_from_user'] = us_mainland_df.apply(
-        lambda row: calculate_distance(row, user_lat, user_lon), axis=1
-    )
-    us_mainland_df = us_mainland_df[us_mainland_df['distance_from_user'] <= radius_selected]
-    zoom = 13
-else:
-    zoom = 4.4
-
 # Displaying Nearby Practices
 us_mainland_df['color'] = us_mainland_df['normalized_days'].apply(color_scale).astype(str)
 
@@ -245,6 +236,15 @@ df_dso_practices["color"] = None
 
 us_mainland_df = pd.concat([us_mainland_df, df_dso_practices], ignore_index=True)
 
+if user_lat is not None and user_lon is not None:
+    us_mainland_df['distance_from_user'] = us_mainland_df.apply(
+        lambda row: calculate_distance(row, user_lat, user_lon), axis=1
+    )
+    us_mainland_df = us_mainland_df[us_mainland_df['distance_from_user'] <= radius_selected]
+    zoom = 13
+else:
+    zoom = 4.4
+
 # us_mainland_df = pd.concat([us_mainland_df, df_dso_practices], ignore_index=True)
 
 map_df = us_mainland_df[['latitude', 'longitude', 'color']]
@@ -267,46 +267,49 @@ except ValueError:
     average_longitude = user_lon
     folium_map = Map(location=[average_latitude, average_longitude], zoom_start=zoom)
 
-for index, row in us_mainland_df.iterrows():
-    custom_popup = create_custom_popup(row['name'], row['address'], row['phone_number'], row['website'],
-                                        row['rating'], row['total_ratings'], row['google_maps_url'],
-                                        row['business_status'], row['dso'])
+if user_lat is not None and user_lon is not None:
+    for index, row in us_mainland_df.iterrows():
+        # Only display practices with a valid latitude and longitude that are within the radius
+        if pd.notna(row['latitude']) and pd.notna(row['longitude']) and row['distance_from_user'] <= radius_selected:
+            custom_popup = create_custom_popup(row['name'], row['address'], row['phone_number'], row['website'],
+                                                row['rating'], row['total_ratings'], row['google_maps_url'],
+                                                row['business_status'], row['dso'])
 
-    Marker(
-        location=[row['latitude'], row['longitude']],
-        popup=custom_popup,
-        icon=Icon(color=color_chooser(row['name'], row['address'], row['dso']))
-        # icon=Icon(color=row['color'])  # Assuming 'color' is defined in your DataFrame
-    ).add_to(folium_map)
+            Marker(
+                location=[row['latitude'], row['longitude']],
+                popup=custom_popup,
+                icon=Icon(color=color_chooser(row['name'], row['address'], row['dso']))
+                # icon=Icon(color=row['color'])  # Assuming 'color' is defined in your DataFrame
+            ).add_to(folium_map)
 
-# Display the map in Streamlit
-streamlit_folium.folium_static(folium_map, width=1000, height=500)
+    # Display the map in Streamlit
+    streamlit_folium.folium_static(folium_map, width=1000, height=500)
 
-with st.expander("View Nearby Practices"):
-    us_mainland_df.reset_index(drop=True, inplace=True)
-    st.data_editor(us_mainland_df)
+    with st.expander("View Nearby Practices"):
+        us_mainland_df.reset_index(drop=True, inplace=True)
+        st.data_editor(us_mainland_df)
 
-generate_button = st.button("Generate", type="primary")
-if generate_button and user_lat is not None and user_lon is not None:
-    inputted_loc = f"{user_lat},{user_lon}"
-    api_key = st.secrets["google_maps_api_key"]
-    json = find_dental_practices_with_details(api_key, inputted_loc, radius_selected * 1609.34, existing_df['place_id'].tolist())
-    st.dataframe(json)
-    df = json_to_dataframe(json)
+    generate_button = st.button("Generate", type="primary")
+    if generate_button and user_lat is not None and user_lon is not None:
+        inputted_loc = f"{user_lat},{user_lon}"
+        api_key = st.secrets["google_maps_api_key"]
+        json = find_dental_practices_with_details(api_key, inputted_loc, radius_selected * 1609.34, existing_df['place_id'].tolist())
+        st.dataframe(json)
+        df = json_to_dataframe(json)
 
-    # Check if the values exist in the database by name and address. If not, add them to the database.
-    name_address_tuples = [(name, address, google_maps_url) for name, address, google_maps_url in zip(df['name'], df['address'], df['google_maps_url'])]
-    existing_name_address_tuples = [(name, address, google_maps_url) for name, address, google_maps_url in zip(original_existing_df['name'], original_existing_df['address'], original_existing_df['google_maps_url'])]
+        # Check if the values exist in the database by name and address. If not, add them to the database.
+        name_address_tuples = [(name, address, google_maps_url) for name, address, google_maps_url in zip(df['name'], df['address'], df['google_maps_url'])]
+        existing_name_address_tuples = [(name, address, google_maps_url) for name, address, google_maps_url in zip(original_existing_df['name'], original_existing_df['address'], original_existing_df['google_maps_url'])]
 
-    new_practices = df[~df[['name', 'address']].apply(tuple, axis=1).isin(existing_name_address_tuples)]
+        new_practices = df[~df[['name', 'address']].apply(tuple, axis=1).isin(existing_name_address_tuples)]
 
-    # Add created_at and updated_at
-    now_datetime = pd.to_datetime('now')
-    new_practices['created_at'] = now_datetime
-    new_practices['updated_at'] = now_datetime
+        # Add created_at and updated_at
+        now_datetime = pd.to_datetime('now')
+        new_practices['created_at'] = now_datetime
+        new_practices['updated_at'] = now_datetime
 
-    engine = create_engine(get_source_database_url())
-    new_practices.to_sql('regional_search_practices', schema="dental_practices", con=engine, if_exists='append', index=False)
-    st.balloons()
-elif generate_button and (user_lat is None or user_lon is None):
-    st.error("Please enter a valid address or zip code.")
+        engine = create_engine(get_source_database_url())
+        new_practices.to_sql('regional_search_practices', schema="dental_practices", con=engine, if_exists='append', index=False)
+        st.balloons()
+    elif generate_button and (user_lat is None or user_lon is None):
+        st.error("Please enter a valid address or zip code.")
