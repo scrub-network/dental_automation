@@ -1,1 +1,1 @@
-## [Streamlit APP](http://199.241.139.206:8501)
+## [Streamlit APP](https://scrub-network.streamlit.app)

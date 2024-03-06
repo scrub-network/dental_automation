@@ -81,8 +81,8 @@ def create_custom_popup(job_title, employer, date_posted, address, website, phon
 # Initialize connection
 db_uri = st.secrets["db_uri"]
 con = create_engine(db_uri)
-
-df = con.execute("SELECT * FROM job_postings").df()
+sql = text("SELECT * FROM public.job_postings")
+df = pd.read_sql(sql, con)
 df = df[['job_title', 'employer', 'employer_type', 'location', 'state', 'date_posted', 'job_type', 'description', 'post_link', 'source', 'created_at']]
 
 total_job_postings, total_job_postings_delta, total_job_postings_last_7_days, seven_days_ago_delta, total_unique_employers, total_unique_employers_delta = get_main_metrics(df)
