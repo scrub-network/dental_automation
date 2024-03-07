@@ -13,12 +13,12 @@ import time
 
 # Streamlit page configuration
 st.set_page_config(
-    page_title="Generate New Private Practices",
-    page_icon="👑",
+    page_title="Practice Search",
+    page_icon="🔎",
     layout="wide",
     initial_sidebar_state="expanded",
 )
-st.title("👑 Generate New Private Practices")
+st.title("🔎 Practices")
 
 # Function Definitions
 
