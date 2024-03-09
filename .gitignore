@@ -5,6 +5,7 @@
 /selenium_scrape
 
 # Unnecesary files
+/streamlit_app/pages/__pycache__
 /__pycache__
 /streamlit_app/utils/__pycache__
 *.pyc

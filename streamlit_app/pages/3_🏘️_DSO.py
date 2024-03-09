@@ -17,7 +17,9 @@ engine = create_engine(db_uri)
 
 # Query data from
 dso_practices_sql = text("SELECT * FROM dso_scraping.dso_practices")
+dso_cleaned_sql = text("SELECT * FROM dental_practices.dso")
 dso_df = pd.read_sql(dso_practices_sql, engine)
+dso_cleaned_df = pd.read_sql(dso_cleaned_sql, engine)
 
 total_dso_practice = dso_df.shape[0]
 total_dso_count = dso_df["dso"].nunique()
@@ -33,11 +35,27 @@ st.write("### DSO Practice Count Summary")
 dso_count_df = dso_df.groupby("dso").agg({"name": "count"}).reset_index()
 dso_count_df = dso_count_df.rename(columns={"name": "count"})
 dso_count_df = dso_count_df.sort_values("count", ascending=False).reset_index(drop=True)
-dso_count_df = dso_count_df.head(10)
+# dso_count_df = dso_count_df.head(10)
 
 # Add total count to the dataframe
 dso_count_df.loc[len(dso_count_df)] = ["Total", total_dso_practice]
 
 st.dataframe(dso_count_df, width=1000)
 
+# Total count by dso
+dso_count_df = dso_cleaned_df.groupby("dso").agg({"name": "count"}).reset_index()
+dso_count_df = dso_count_df.rename(columns={"name": "count"})
+dso_count_df = dso_count_df.sort_values("count", ascending=False).reset_index(drop=True)
+# dso_count_df = dso_count_df.head(10)
+
+st.dataframe(dso_count_df, width=1000)
+
 st.data_editor(dso_df, num_rows="dynamic")
+st.write("Count: ", len(dso_df))
+st.data_editor(dso_cleaned_df, num_rows="dynamic")
+st.write("Count: ", len(dso_cleaned_df))
+
+st.write("# ")
+st.write("### DSO Practice Count Summary (Cleaned)")
+
+
