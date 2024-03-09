@@ -6,8 +6,8 @@ from utils.geomaps_api import geocode_locations_using_google
 from utils.clean_description import clean_and_format_text
 from utils.metrics import get_main_metrics
 from utils.map_customization import color_scale, calculate_distance, \
-                                    job_posting_containers, create_custom_popup_job_posting, \
-                                    contains_zip_code, contains_city_name
+                                    job_posting_containers, create_custom_popup_job_posting
+from utils.us_states_mapping import contains_zip_code, contains_city_name
 from geopy.distance import geodesic
 import streamlit_folium
 import plotly.express as px
@@ -214,11 +214,18 @@ with tab2:
         df_usefulness_count.reset_index(drop=True, inplace=True)
         st.dataframe(df_usefulness_count)
 
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        # Create a bar chart
+        colors = {'Useful': 'green', 'Partially Useful': '#1fd655', 'Not Useful': 'red'}
+        fig_usefulness = px.bar(df_usefulness_count, x='source', y='count', color='usefulness',
+                                labels={'x': 'Source', 'y': 'Number of Postings'}, color_discrete_map=colors)
+        st.plotly_chart(fig_usefulness)
+    with c3:
         # Show overall usefulness
         df_usefulness_overall = df.groupby(['usefulness']).size().reset_index(name='count')
         df_usefulness_overall['percentage'] = df_usefulness_overall['count'] / df_usefulness_overall['count'].sum() * 100
         st.dataframe(df_usefulness_overall)
-        
 
     # Move contains_ columns up front
     df = df[['contains_zip_code', 'contains_city_name', 'location',

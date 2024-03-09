@@ -178,20 +178,6 @@ def color_chooser(name, address, category):
     else:
         return 'red'
 
-def contains_zip_code(s):
-    # Regular expression for a five-digit zip code
-    zip_code_pattern = r'\b\d{5}\b'
-    # Search the string for the pattern
-    return re.search(zip_code_pattern, s) is not None
-
-def contains_city_name(address):
-    # This regex pattern looks for a sequence of alphabetic characters that could be a city name
-    # followed by a space and state abbreviation, which is typical in US addresses.
-    pattern = r'\b([A-Za-z][a-zA-Z\s.-]*[A-Za-z])\b(?![\s]*\d)'
-
-    # Use re.search() to check if the pattern is found in the address
-    return bool(re.search(pattern, address))
-
 if __name__ != "__main__":
     # If the script is being imported, do not run the main function
     pass
