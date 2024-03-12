@@ -19,26 +19,6 @@ def calculate_distance(row, user_lat, user_lon):
     user_location = (user_lat, user_lon)
     return geodesic(practice_location, user_location).miles
 
-def job_posting_containers(df):
-    for ind, row in df.iterrows():
-        employer = row['employer'].strip("(AI) ")
-        with st.expander(f"**{employer}** - {row['location']}"):
-            st.markdown(f"## [{row['job_title']}]({row['post_link']})")
-            st.markdown(f"**Source:** {row['source']}")
-            st.markdown(f"**Employer:** {row['employer']}")
-            st.markdown(f"**Location:** {row['actual_address']}")
-            st.markdown(f"**Date Posted:** {row['date_posted']}")
-            st.markdown(f"**Job Type:** {row['job_type']}")
-            description = clean_and_format_text(row['description'])
-            st.markdown(f"**Description:** {description}")
-            if row['days_of_week'] and not pd.isna(row['days_of_week']) and row['days_of_week'] != 'Not Provided':
-                st.markdown(f"**Days of Week:** {row['days_of_week']}")
-            if row['phone_number'] and not pd.isna(row['phone_number']):
-                st.markdown(f"**Phone Number:** {row['phone_number']}")
-            if row['email_address'] and not pd.isna(row['email_address']):
-                st.markdown(f"**Email Address:** {row['email_address']}")
-        st.write(" ")
-
 def create_custom_popup_practice_search(name, address, phone_number, website, rating, total_ratings, google_maps_url, business_status, dso, width=300, height=200):
     # HTML content for the popup
     html_content = f'''

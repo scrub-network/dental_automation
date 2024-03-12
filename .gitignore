@@ -3,6 +3,7 @@
 /cron_automation
 /scrape_test
 /selenium_scrape
+/canvas
 
 # Unnecesary files
 /streamlit_app/pages/__pycache__

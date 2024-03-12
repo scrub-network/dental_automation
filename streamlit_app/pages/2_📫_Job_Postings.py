@@ -5,8 +5,7 @@ from sqlalchemy import create_engine, text
 from utils.geomaps_api import geocode_locations_using_google
 from utils.clean_description import clean_and_format_text
 from utils.metrics import get_main_metrics
-from utils.map_customization import color_scale, calculate_distance, \
-                                    job_posting_containers, create_custom_popup_job_posting
+from utils.map_customization import color_scale, calculate_distance, create_custom_popup_job_posting
 from utils.us_states_mapping import contains_zip_code, contains_city_name
 from geopy.distance import geodesic
 import streamlit_folium
@@ -14,6 +13,27 @@ import plotly.express as px
 from datetime import datetime
 from folium import Map, Marker, Icon, Popup
 import re
+
+def job_posting_containers(df):
+    for ind, row in df.iterrows():
+        employer = row['employer'].strip("(AI) ")
+        valid_status = row['validity_status']
+        with st.expander(f"**{employer}** - {row['location']} [{valid_status}]"):
+            st.markdown(f"## [{row['job_title']}]({row['post_link']})")
+            st.markdown(f"**Source:** {row['source']}")
+            st.markdown(f"**Employer:** {row['employer']}")
+            st.markdown(f"**Location:** {row['actual_address']}")
+            st.markdown(f"**Date Posted:** {row['date_posted']}")
+            st.markdown(f"**Job Type:** {row['job_type']}")
+            description = clean_and_format_text(row['description'])
+            st.markdown(f"**Description:** {description}")
+            if row['days_of_week'] and not pd.isna(row['days_of_week']) and row['days_of_week'] != 'Not Provided':
+                st.markdown(f"**Days of Week:** {row['days_of_week']}")
+            if row['phone_number'] and not pd.isna(row['phone_number']):
+                st.markdown(f"**Phone Number:** {row['phone_number']}")
+            if row['email_address'] and not pd.isna(row['email_address']):
+                st.markdown(f"**Email Address:** {row['email_address']}")
+        st.write(" ")
 
 # Streamlit page configuration
 st.set_page_config(
@@ -27,12 +47,17 @@ st.title("📫 Job Postings")
 # Initialize connection
 db_uri = st.secrets["db_uri"]
 con = create_engine(db_uri)
-sql = text("SELECT * FROM public.job_postings")
-df = pd.read_sql(sql, con)
+df = pd.read_sql("select * from public.job_postings", con)
+validation_df = pd.read_sql_query('select * from source.validations', con=con)
+df = df.merge(validation_df, how='left', on=['job_id', 'post_link'])
 df = df[['job_title', 'employer', 'employer_type',
          'location', 'state', 'date_posted',
          'job_type', 'description', 'post_link',
-         'source', 'created_at']]
+         'source', 'validity_status', 'expired_date', 
+         'created_at']]
+
+# If validty_status is Valid then make expired_date as None
+df['expired_date'] = np.where(df['validity_status'] == 'Valid', None, df['expired_date'])
 
 total_job_postings, total_job_postings_delta, total_job_postings_last_7_days, \
 seven_days_ago_delta, total_unique_employers, total_unique_employers_delta = get_main_metrics(df)
@@ -53,6 +78,7 @@ sql = text("SELECT * FROM source.source_private_practices")
 existing_df = pd.read_sql(sql, con)
 existing_df["latitude"] = existing_df["latitude"].astype(float)
 existing_df["longitude"] = existing_df["longitude"].astype(float)
+existing_df = existing_df.merge(validation_df, how='left', on=['job_id', 'post_link'])
 
 # Remove rows with latitude and longitude as null
 existing_df.dropna(subset=['latitude', 'longitude'], inplace=True)
@@ -118,7 +144,7 @@ if user_location:
                                      'date_posted', 'job_type', 'description',
                                      'days_of_week', 'post_link', 'source',
                                      'actual_address', 'phone_number', 'email_address',
-                                     'created_at']]
+                                     'validity_status', 'expired_date', 'created_at']]
 
     # st.data_editor(us_mainland_df, num_rows="dynamic", hide_index=True)
     # Order by date_posted
@@ -132,7 +158,7 @@ else:
                                      'state', 'date_posted', 'job_type',
                                      'description', 'days_of_week', 'post_link',
                                      'source', 'actual_address', 'phone_number',
-                                     'email_address', 'created_at']]
+                                     'email_address', 'validity_status', 'expired_date', 'created_at']]
     # st.data_editor(us_mainland_df, num_rows="dynamic", hide_index=True)
     # Order by date_posted
     us_mainland_df = us_mainland_df.sort_values(by=['date_posted'], ascending=False)
@@ -147,6 +173,13 @@ with tab2:
     df['date_posted'] = pd.to_datetime(df['date_posted'], errors='coerce')
 
     st.header('General Statistics')
+
+    # Demonstrate Valid vs Expired/Broken Status
+    c1, c2 = st.columns(2)
+    with c1:
+        st.metric(label="Valid Links Count", value=df[df['validity_status'] == 'Valid'].shape[0])
+    with c2:
+        st.metric(label="Expired/Broken Links Count", value=df[df['validity_status'] != 'Valid'].shape[0])
 
     # Divide the posting into groups: 1 week old, 1 month old, 3 months old, and older
     one_week_ago = pd.to_datetime('today') - pd.Timedelta(days=7)
@@ -231,7 +264,10 @@ with tab2:
     df = df[['contains_zip_code', 'contains_city_name', 'location',
              'source', 'employer', 'date_posted', 'job_title',
              'employer_type', 'state', 'job_type', 'description',
-             'post_link', 'created_at']]
+             'post_link', 'validity_status', 'expired_date', 'created_at']]
+
+    # To datetime
+    df["expired_date"] = pd.to_datetime(df["expired_date"], errors='coerce')
 
     # Order by contains_ true
     df = df.sort_values(by=['contains_zip_code', 'contains_city_name', 'date_posted'],
@@ -239,4 +275,3 @@ with tab2:
     st.subheader("Raw Data")
     st.write("This table shows the raw data.")
     st.data_editor(df, num_rows="dynamic")
-    
