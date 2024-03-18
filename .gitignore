@@ -11,6 +11,7 @@
 /streamlit_app/utils/__pycache__
 *.pyc
 geckodriver.log
+/backup
 
 # Secrets
 /.streamlit

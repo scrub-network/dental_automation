@@ -47,8 +47,8 @@ st.title("📫 Job Postings")
 # Initialize connection
 db_uri = st.secrets["db_uri"]
 con = create_engine(db_uri)
-df = pd.read_sql("select * from public.job_postings", con)
-validation_df = pd.read_sql_query('select * from source.validations', con=con)
+df = pd.read_sql("select * from job_post_scraping.job_postings", con)
+validation_df = pd.read_sql_query('select * from validation.job_post_validation', con=con)
 df = df.merge(validation_df, how='left', on=['job_id', 'post_link'])
 df = df[['job_title', 'employer', 'employer_type',
          'location', 'state', 'date_posted',
@@ -74,7 +74,7 @@ with c3:
 
 # Add Spacing
 st.write("# ")
-sql = text("SELECT * FROM source.source_private_practices")
+sql = text("SELECT * FROM validation.private_practices")
 existing_df = pd.read_sql(sql, con)
 existing_df["latitude"] = existing_df["latitude"].astype(float)
 existing_df["longitude"] = existing_df["longitude"].astype(float)

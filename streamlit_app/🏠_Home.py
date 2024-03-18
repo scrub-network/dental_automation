@@ -16,7 +16,7 @@ db_uri = st.secrets["db_uri"]
 engine = create_engine(db_uri)
 
 # Query data from Data
-job_posting_sql = text("SELECT * FROM public.job_postings")
+job_posting_sql = text("SELECT * FROM job_post_scraping.job_postings")
 df = pd.read_sql(job_posting_sql, engine)
 df = df[['job_title', 'employer', 'location', 'state', 'date_posted', 'job_type', 'description', 'post_link', 'source', 'created_at']]
 
