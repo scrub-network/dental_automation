@@ -1,5 +1,4 @@
-version: '3.3'
-
+version: '3.8'
 services:
   # Postgres
   dental_postgres_db:
@@ -7,8 +6,6 @@ services:
     image: postgres:latest
     ports:
       - '5431:5432'
-    networks:
-      - my_custom_network
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -20,10 +17,4 @@ services:
     build: ./streamlit_app
     ports:
       - '8501:8501'
-    networks:
-      - my_custom_network
     restart: on-failure
-
-networks:
-  my_custom_network:
-    external: true
