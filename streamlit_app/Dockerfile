@@ -7,11 +7,11 @@ WORKDIR /app
 # Copy the requirements file into the container
 COPY requirements.txt .
 
-# Upgrade pip to the latest version
-RUN pip install --no-cache-dir --upgrade pip
-
 # Make sure the system dependencies are installed
 RUN apt-get update && apt-get install -y libxml2-dev libxslt-dev python3-dev
+
+# Upgrade pip to the latest version
+RUN pip install --no-cache-dir --upgrade pip
 
 # Install the Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
