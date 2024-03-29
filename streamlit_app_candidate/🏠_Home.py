@@ -19,93 +19,139 @@ def get_db_connection():
     engine = create_engine(db_uri)
     return engine
 
+@st.cache_data(ttl=600, max_entries=20, show_spinner=False, persist=False)  # Shorter `ttl` for potentially sensitive or frequently updated data
+def get_user_credentials():
+    engine = get_db_connection()
+    return pd.read_sql("SELECT * FROM streamlit_app_candidate.user_credentials", engine)
+
+@st.cache_data(ttl=6000, max_entries=20, show_spinner=False, persist=False)  # Shorter `ttl` for potentially sensitive or frequently updated data
+def get_dso_practices():
+    engine = get_db_connection()
+    return pd.read_sql("SELECT * FROM practice.dso", engine)
+
 def create_account(username, password, first_name, last_name, email):
     engine = get_db_connection()
     hashed_password = hash_password(password)
-    with engine.connect() as connection:
-        try:
-            sql = """
-            INSERT INTO streamlit_app_candidate.user_credentials (username, password, first_name, last_name, email)
-            VALUES (%s, %s, %s, %s, %s)
-            """
-            connection.execute(sql, (username, hashed_password, first_name, last_name, email))
-            return True
-        except SQLAlchemyError as e:
-            print(e)
-            return False
+    user_data = {
+        'username': [username],
+        'password': [hashed_password],
+        'first_name': [first_name],
+        'last_name': [last_name],
+        'email': [email]
+    }
+    user_df = pd.DataFrame(user_data)
 
+    try:
+        user_df.to_sql('user_credentials', con=engine, schema='streamlit_app_candidate', if_exists='append', index=False)
+        return True
+    except SQLAlchemyError as e:
+        print(e)
+        return False
 
 def authenticate_user(username, password):
     engine = get_db_connection()
     success = False  # Default to failure
-    with engine.connect() as connection:
-        # Check user credentials
-        sql = """
-        SELECT password FROM streamlit_app_candidate.user_credentials
-        WHERE username = %s
-        """
-        user = connection.execute(sql, (username,)).fetchone()
-        
-        # Verify password and set success flag
-        if user and user['password'] == hash_password(password):
-            success = True
 
-        # Log the login attempt
-        log_sql = """
-        INSERT INTO streamlit_app_candidate.login_log (username, login_time, login_status)
-        VALUES (%s, CURRENT_TIMESTAMP, %s)
-        """
-        connection.execute(log_sql, (username, 'Success' if success else 'Failure'))
+    # Check user credentials
+    sql = """
+    SELECT password FROM streamlit_app_candidate.user_credentials
+    WHERE username = %s
+    """
+    user_df = pd.read_sql_query(sql, engine, params=[username])
 
-        return success
+    # Verify password and set success flag
+    if not user_df.empty and user_df.iloc[0]['password'] == hash_password(password):
+        success = True
+
+    # Log the login attempt
+    log_data = {
+        'username': [username],
+        'login_time': [pd.Timestamp.now()],
+        'login_status': ['Success' if success else 'Failure']
+    }
+    log_df = pd.DataFrame(log_data)
+
+    log_df.to_sql('login_log', con=engine, schema='streamlit_app_candidate', if_exists='append', index=False)
+
+    # Make sure username is stored in session state
+    if success:
+        st.session_state['username'] = username
+
+    return success
+
+def log_activity(username, location_input, radius, user_lat, user_lon, total_results):
+    engine = get_db_connection()
+    activity_data = {
+        'username': username,
+        'location_input': location_input,
+        'radius': radius,
+        'user_lat': user_lat,
+        'user_lon': user_lon,
+        'total_results': total_results
+    }
+    activity_df = pd.DataFrame([activity_data])  # Ensure data is in a list to form a single-row DataFrame
+
+    try:
+        activity_df.to_sql('activity_log', con=engine, schema='streamlit_app_candidate', if_exists='append', index=False)
+        return True
+    except Exception as e:
+        print(e)
+        return False
 
 # Streamlit UI for account creation and login
 st.set_page_config(page_title="DSO", page_icon=":tooth:", layout="wide")
 st.title("Scrub Network")
 
-menu = ["Login", "Create Account"]
-choice = st.sidebar.selectbox("Menu", menu)
+engine = get_db_connection()
+df_dso_practices = get_dso_practices()  # Replace direct call with cached function
+user_df = get_user_credentials()  # Replace direct call with cached function
 
-if choice == "Create Account":
-    first_name = st.sidebar.text_input("First Name")
-    last_name = st.sidebar.text_input("Last Name")
-    email = st.sidebar.text_input("Email")
-    username = st.sidebar.text_input("Username")
-    password = st.sidebar.text_input("Password", type="password")
-    confirm_password = st.sidebar.text_input("Retype password", type="password")
-    
-    if st.sidebar.button("Create Account"):
-        if password != confirm_password:
-            st.error("Passwords do not match!")
-        elif create_account(username, password, first_name, last_name, email):
-            st.success("Account created successfully!")
-            # clear success message after 5 seconds
-            st.experimental_rerun()
-        else:
-            st.error("Failed to create account")
-            st.experimental_rerun()
+authenticated = False
+if 'authenticated' not in st.session_state:
+    menu = ["Login", "Create Account"]
+    choice = st.sidebar.selectbox("Menu", menu)
+    if choice == "Create Account":
+        first_name = st.sidebar.text_input("First Name")
+        last_name = st.sidebar.text_input("Last Name")
+        email = st.sidebar.text_input("Email")
+        username = st.sidebar.text_input("Username")
+        password = st.sidebar.text_input("Password", type="password")
+        confirm_password = st.sidebar.text_input("Retype password", type="password")
 
-elif choice == "Login":
-    username = st.sidebar.text_input("Username")
-    password = st.sidebar.text_input("Password", type="password")
-    if st.sidebar.button("Login"):
-        if authenticate_user(username, password):
-            st.session_state['authenticated'] = True
-            st.success("Logged in successfully!")
-        else:
-            st.error("Failed to log in")
+        if st.sidebar.button("Create Account"):
+            if password != confirm_password:
+                st.error("Passwords do not match!")
+            elif create_account(username, password, first_name, last_name, email):
+                st.balloons()
+            elif first_name == "" or last_name == "" or email == "" or username == "" or password == "":
+                st.error("Please fill in all fields")
+            elif username in user_df['username'].values:
+                st.error("Username already exists")
+            else:
+                st.error("Failed to create account")
+
+    elif choice == "Login":
+        username = st.sidebar.text_input("Username")
+        password = st.sidebar.text_input("Password", type="password")
+        if st.sidebar.button("Login"):
+            if authenticate_user(username, password):
+                st.session_state['authenticated'] = True
+                st.balloons()
+                st.session_state['username'] = username
+            # already authenticated
+            elif st.session_state.get('authenticated'):
+                pass
+            else:
+                st.error("Failed to log in")
+else:
+    username = st.session_state['username']
+    user_df = get_user_credentials()  # Replace direct call with cached function
+    st.write("#### Welcome, ", user_df[user_df['username'] == username]['first_name'].values[0], " 👋")
 
 # Display the rest of the page only if the user is authenticated
 if st.session_state.get('authenticated'):
-    # Initialize connection
-    engine = get_db_connection()
-    user_df = pd.read_sql("SELECT * FROM streamlit_app_candidate.user_credentials", engine)
     user_name = user_df[user_df['username'] == username]['first_name'].values[0]
-    st.write("#### Welcome, ", user_name, " 👋")
     st.divider()
-
-    # Query data
-    df_dso_practices = pd.read_sql("SELECT * FROM practice.dso", engine)
 
     # Filtering and Processing Data for U.S. Mainland
     min_latitude, max_latitude = 24.396308, 49.384358
@@ -163,6 +209,9 @@ if st.session_state.get('authenticated'):
 
         # Display the map in Streamlit
         streamlit_folium.folium_static(folium_map, width=1000, height=500)
+
+        # Log user activity
+        log_activity(username, user_location, radius_selected, user_lat, user_lon, us_mainland_df.shape[0])
 
         with st.expander("View Nearby Practices"):
             us_mainland_df.reset_index(drop=True, inplace=True)
