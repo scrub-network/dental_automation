@@ -19,6 +19,8 @@ engine = create_engine(db_uri)
 dso_practices_sql = text("SELECT * FROM dso_scraping.dso_practices")
 dso_cleaned_sql = text("SELECT * FROM practice.dso")
 dso_df = pd.read_sql(dso_practices_sql, engine)
+dso_df.drop_duplicates(inplace=True)
+dso_df.reset_index(drop=True, inplace=True)
 dso_cleaned_df = pd.read_sql(dso_cleaned_sql, engine)
 
 total_dso_practice = dso_df.shape[0]
@@ -49,21 +51,7 @@ dso_count_df = dso_count_df.rename(columns={"name": "count"})
 dso_count_df = dso_count_df.sort_values("count", ascending=False).reset_index(drop=True)
 # dso_count_df = dso_count_df.head(10)
 
-st.write("#### Cleaned DSO Practice Count")
-st.dataframe(dso_count_df, width=1000)
-
 st.write("#### DSO Practice Data")
 st.data_editor(dso_df, num_rows="dynamic")
 st.write("Count: ", len(dso_df))
 st.write("Count without place_id: ", len(dso_df[dso_df["place_id"].isnull()]))
-
-st.write("#### Cleaned DSO Practice Data")
-st.data_editor(dso_cleaned_df, num_rows="dynamic")
-st.write("Count: ", len(dso_cleaned_df))
-
-st.write("Count Discrepency: ", len(dso_df) - len(dso_cleaned_df))
-
-st.write("# ")
-# st.write("### DSO Practice Count Summary (Cleaned)")
-
-
