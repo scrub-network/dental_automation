@@ -132,12 +132,6 @@ def send_resume_email(resume_file, user_df):
     sender_email = "anddy0622@gmail.com"
     password = st.secrets["smtp_password"]
     receiver_emails = ["anddy0622@gmail.com", "sean@scrubnetwork.com"]
-    # receiver_email = "anddy0622@gmail.com"
-
-    username = user_df['username'].values[0]
-    first_name = user_df['first_name'].values[0]
-    last_name = user_df['last_name'].values[0]
-    email = user_df['email'].values[0]
 
     # Send email
     server = smtplib.SMTP('smtp.gmail.com', 587)
@@ -151,7 +145,7 @@ def send_resume_email(resume_file, user_df):
         msg['Subject'] = "[NEW RESUME UPLOADED] - SCRUB NETWORK"
 
         # Attach the resume file to the email
-        msg.attach(MIMEText("Hello, \n\nA new resume has been uploaded by " + first_name + " " + last_name + " (" + username + ").\n\n"))
+        msg.attach(MIMEText("Hello, \n\nA new resume has been uploaded by " + st.session_state["frist_name"] + " " + st.session_state["last_name"] + " (" + st.session_state["username"] + ").\n\n"))
         attachment = MIMEBase('application', 'octet-stream')
         attachment.set_payload(resume_file.getvalue())
         encoders.encode_base64(attachment)
