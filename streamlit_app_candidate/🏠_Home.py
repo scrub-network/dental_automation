@@ -131,7 +131,7 @@ def authenticate_with_google():
 def send_resume_email(resume_file, user_df):
     sender_email = "anddy0622@gmail.com"
     password = st.secrets["smtp_password"]
-    receiver_emails = ["anddy0622@gmail.com", "sean@scrubnetwork.com"]
+    receiver_emails = ["anddy0622@gmail.com"]#, "sean@scrubnetwork.com"]
 
     # Send email
     server = smtplib.SMTP('smtp.gmail.com', 587)
@@ -145,7 +145,9 @@ def send_resume_email(resume_file, user_df):
         msg['Subject'] = "[NEW RESUME UPLOADED] - SCRUB NETWORK"
 
         # Attach the resume file to the email
-        msg.attach(MIMEText("Hello, \n\nA new resume has been uploaded by " + st.session_state["first_name"] + " " + st.session_state["last_name"] + " (" + st.session_state["username"] + ").\n\n"))
+        msg.attach(MIMEText("Hello, \n\nA new resume has been uploaded by the following user:<br> <br> " + "<b>First Name</b>: " + st.session_state['first_name'] +\
+                            "\n<br> <b>Last Name</b>: " + st.session_state['last_name'] + "<br> \n<b>Email</b>: " + st.session_state['email'] +\
+                            "\n<br> <b>Username</b>: " + st.session_state['username'] + "\n\n", 'html'))
         attachment = MIMEBase('application', 'octet-stream')
         attachment.set_payload(resume_file.getvalue())
         encoders.encode_base64(attachment)
