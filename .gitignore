@@ -14,5 +14,7 @@ geckodriver.log
 /backup
 
 # Secrets
+streamlit_app_candidate/credentials
 /.streamlit
 .env
+streamlit_app_candidate/.streamlit

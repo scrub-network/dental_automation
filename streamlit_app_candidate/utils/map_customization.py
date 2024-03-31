@@ -20,6 +20,10 @@ def calculate_distance(row, user_lat, user_lon):
     return geodesic(practice_location, user_location).miles
 
 def create_custom_popup_practice_search(name, address, phone_number, website, rating, total_ratings, google_maps_url, business_status, dso, width=300, height=200):
+    try:
+        total_ratings = int(total_ratings)
+    except:
+        total_ratings = 'N/A'
     # HTML content for the popup
     html_content = f'''
     <div style="font-size: 12pt; font-family: Arial;">
@@ -27,8 +31,9 @@ def create_custom_popup_practice_search(name, address, phone_number, website, ra
         <b>Address</b>: {address}<br>
         <b>Status</b>: {business_status}<br>
         <b>Google Maps</b>: <a href="{google_maps_url}" target="_blank">View on Google Maps</a><br>
-        <b>Rating</b>: {rating} ({total_ratings} ratings)<br>
     '''
+    if rating and not pd.isna(rating):
+        html_content += f'<b>Rating</b>: {rating} ({total_ratings} reviews)<br>'
     if website and not pd.isna(website):
         html_content += f'<b>Website</b>: <a href="{website}" target="_blank">{website}</a><br>'
     if phone_number and not pd.isna(phone_number):
