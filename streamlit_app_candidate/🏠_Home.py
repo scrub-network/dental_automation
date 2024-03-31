@@ -8,8 +8,6 @@ from folium import Map, Marker, Icon, IFrame, Popup
 import streamlit_folium
 import pandas as pd
 import hashlib
-from pydrive2.auth import GoogleAuth
-from pydrive2.drive import GoogleDrive
 from streamlit import file_uploader
 import smtplib
 from email.mime.multipart import MIMEMultipart
