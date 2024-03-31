@@ -131,7 +131,7 @@ def authenticate_with_google():
 def send_resume_email(resume_file, user_df):
     sender_email = "anddy0622@gmail.com"
     password = st.secrets["smtp_password"]
-    receiver_emails = ["anddy0622@gmail.com"]#, "sean@scrubnetwork.com"]
+    receiver_emails = ["anddy0622@gmail.com", "sean@scrubnetwork.com"]
 
     # Send email
     server = smtplib.SMTP('smtp.gmail.com', 587)
