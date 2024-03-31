@@ -145,7 +145,7 @@ def send_resume_email(resume_file, user_df):
         msg['Subject'] = "[NEW RESUME UPLOADED] - SCRUB NETWORK"
 
         # Attach the resume file to the email
-        msg.attach(MIMEText("Hello, \n\nA new resume has been uploaded by " + st.session_state["frist_name"] + " " + st.session_state["last_name"] + " (" + st.session_state["username"] + ").\n\n"))
+        msg.attach(MIMEText("Hello, \n\nA new resume has been uploaded by " + st.session_state["first_name"] + " " + st.session_state["last_name"] + " (" + st.session_state["username"] + ").\n\n"))
         attachment = MIMEBase('application', 'octet-stream')
         attachment.set_payload(resume_file.getvalue())
         encoders.encode_base64(attachment)
