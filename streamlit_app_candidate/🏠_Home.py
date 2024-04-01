@@ -257,11 +257,21 @@ if st.session_state.get('authenticated') and st.session_state['resume_uploaded']
     else:
         zoom = 4.4
 
+    # Create a unique color for each dso
+    unique_dso = us_mainland_df['dso'].unique()
+    distinct_colors = ["red", "blue", "green", "purple", "orange", "darkred", "lightred", "beige", "darkblue",\
+                        "darkgreen", "cadetblue", "darkpurple", "white", "pink", "lightblue", "lightgreen", "gray"]
+    dso_color_dict = dict(zip(unique_dso, distinct_colors))
+    us_mainland_df['color'] = us_mainland_df['dso'].map(dso_color_dict)
     map_df = us_mainland_df[['latitude', 'longitude']]
     map_df.reset_index(drop=True, inplace=True)
 
     average_latitude = map_df['latitude'].dropna().mean()
     average_longitude = map_df['longitude'].dropna().mean()
+
+    # Create true/false filter for dso color
+    dso_filter = st.multiselect("Filter by DSO", unique_dso, default=unique_dso)
+    us_mainland_df = us_mainland_df[us_mainland_df['dso'].isin(dso_filter)]
 
     try:
         folium_map = Map(location=[average_latitude, average_longitude], zoom_start=zoom)
@@ -271,6 +281,13 @@ if st.session_state.get('authenticated') and st.session_state['resume_uploaded']
         folium_map = Map(location=[average_latitude, average_longitude], zoom_start=zoom)
 
     if user_lat is not None and user_lon is not None:
+        # Create a distinct marker for the user's location
+        Marker(
+            location=[user_lat, user_lon],
+            popup='Your Location',
+            icon=Icon(color='black', icon='star', prefix='fa', icon_color='yellow', size=(24, 24))  # Customize this icon as per your preference
+        ).add_to(folium_map)
+
         for index, row in us_mainland_df.iterrows():
             # Only display practices with a valid latitude and longitude that are within the radius
             if pd.notna(row['latitude']) and pd.notna(row['longitude']) and row['distance_from_user'] <= radius_selected:
@@ -280,8 +297,8 @@ if st.session_state.get('authenticated') and st.session_state['resume_uploaded']
                 Marker(
                     location=[row['latitude'], row['longitude']],
                     popup=custom_popup,
-                    icon=Icon(color=color_chooser(row['name'], row['full_address'], row['dso']))
-                    # icon=Icon(color=row['color'])  # Assuming 'color' is defined in your DataFrame
+                    # icon=Icon(color=color_chooser(row['name'], row['full_address'], row['dso'])),
+                    icon=Icon(color=row['color'])  # Assuming 'color' is defined in your DataFrame
                 ).add_to(folium_map)
 
         # Display the map in Streamlit
@@ -296,6 +313,7 @@ if st.session_state.get('authenticated') and st.session_state['resume_uploaded']
                                              "reviews", "location_link", "business_status", "dso",
                                              "distance_from_user"]]
             st.data_editor(us_mainland_df, key="nearby_practices")
+
 elif st.session_state.get('authenticated') and st.session_state['resume_uploaded'] == False:
     st.write("# ")
     st.write("### Please upload your resume to continue ✨")
