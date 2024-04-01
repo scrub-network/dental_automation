@@ -35,7 +35,8 @@ def create_custom_popup_practice_search(name, address, phone_number, website, ra
     if rating and not pd.isna(rating):
         html_content += f'<b>Rating</b>: {rating} ({total_ratings} reviews)<br>'
     if website and not pd.isna(website):
-        html_content += f'<b>Website</b>: <a href="{website}" target="_blank">{website}</a><br>'
+        # Make "link" clickable
+        html_content += f'<b>Website</b>: <a href="{website}" target="_blank">View Website</a><br>'
     if phone_number and not pd.isna(phone_number):
         html_content += f'<b>Phone Number</b>: {phone_number}<br>'
     if dso and not pd.isna(dso):
