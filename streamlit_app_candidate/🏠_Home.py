@@ -201,6 +201,10 @@ if 'authenticated' not in st.session_state:
             else:
                 st.error("Failed to create account")
             user_df = get_user_credentials()  # Replace direct call with cached function
+            # Direct user to login page
+            authenticate_user(email, password)
+            st.session_state['authenticated'] = True
+            st.session_state["resume_uploaded"] = False
 
     elif choice == "Login":
         email = st.sidebar.text_input("Email")
