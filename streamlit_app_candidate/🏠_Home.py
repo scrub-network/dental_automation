@@ -32,6 +32,10 @@ def get_user_credentials():
     engine = get_db_connection()
     return pd.read_sql("SELECT * FROM streamlit_app_candidate.user_credentials", engine)
 
+def get_user_credentials_force_run():
+    engine = get_db_connection()
+    return pd.read_sql("SELECT * FROM streamlit_app_candidate.user_credentials", engine)
+
 @st.cache_data(ttl=6000, max_entries=20, show_spinner=False, persist=False)  # Shorter `ttl` for potentially sensitive or frequently updated data
 def get_dso_practices():
     engine = get_db_connection()
@@ -218,9 +222,13 @@ if 'authenticated' not in st.session_state:
 else:
     email = st.session_state['email']
     user_df = get_user_credentials()  # Replace direct call with cached function
-    st.write("#### Welcome, ", st.session_state["email"], " 👋")
+    try:
+        first_name = user_df[user_df['email'] == email]['first_name'].values[0]
+    except:
+        first_name = st.session_state['first_name']
+    st.write("#### Welcome, ", first_name.capitalize(), " 👋")
 
-st.write(st.session_state)
+user_df = get_user_credentials_force_run()  # Replace direct call with cached function
 
 # Display the rest of the page only if the user is authenticated
 if st.session_state.get('authenticated') and st.session_state['resume_uploaded']:
@@ -324,7 +332,7 @@ elif st.session_state.get('authenticated') and st.session_state['resume_uploaded
         existing_df = update_user_credentials()
 
         # Check if the current user is in user_df
-        if email not in existing_df['email'].values:
+        if email not in existing_df['email'].values and email != st.session_state['email']:
             if user_df['id'].empty:
                 user_id = 1
             else:
