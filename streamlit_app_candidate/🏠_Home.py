@@ -67,11 +67,11 @@ def authenticate_user(email, password):
     success = False  # Default to failure
 
     # Check user credentials
-    sql = """
+    sql = f"""
     SELECT password FROM streamlit_app_candidate.user_credentials
-    WHERE email = %s
+    WHERE email = '{email}
     """
-    user_df = pd.read_sql_query(sql, engine, params=[email])
+    user_df = pd.read_sql_query(sql, engine)
 
     # Verify password and set success flag
     if not user_df.empty and user_df.iloc[0]['password'] == hash_password(password):
