@@ -69,7 +69,7 @@ def authenticate_user(email, password):
     # Check user credentials
     sql = f"""
     SELECT password FROM streamlit_app_candidate.user_credentials
-    WHERE email = '{email}
+    WHERE email = '{email}'
     """
     user_df = pd.read_sql_query(sql, engine)
 
