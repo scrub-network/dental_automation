@@ -37,7 +37,7 @@ def get_dso_practices():
     engine = get_db_connection()
     return pd.read_sql("SELECT * FROM practice.dso", engine)
 
-def create_account(username, password, first_name, last_name, email, user_df):
+def create_account(email, password, first_name, last_name, user_df):
     engine = get_db_connection()
     hashed_password = hash_password(password)
     if user_df['id'].empty:
@@ -46,11 +46,10 @@ def create_account(username, password, first_name, last_name, email, user_df):
         user_id = user_df['id'].max() + 1
     user_data = {
         'id': [user_id],
-        'username': [username],
+        'email': [email],
         'password': [hashed_password],
         'first_name': [first_name],
         'last_name': [last_name],
-        'email': [email],
         'created_at': [pd.Timestamp.now()],
         'resume_uploaded': [False]
     }
@@ -63,16 +62,16 @@ def create_account(username, password, first_name, last_name, email, user_df):
         print(e)
         return False
 
-def authenticate_user(username, password):
+def authenticate_user(email, password):
     engine = get_db_connection()
     success = False  # Default to failure
 
     # Check user credentials
     sql = """
     SELECT password FROM streamlit_app_candidate.user_credentials
-    WHERE username = %s
+    WHERE email = %s
     """
-    user_df = pd.read_sql_query(sql, engine, params=[username])
+    user_df = pd.read_sql_query(sql, engine, params=[email])
 
     # Verify password and set success flag
     if not user_df.empty and user_df.iloc[0]['password'] == hash_password(password):
@@ -80,7 +79,7 @@ def authenticate_user(username, password):
 
     # Log the login attempt
     log_data = {
-        'username': [username],
+        'email': [email],
         'login_time': [pd.Timestamp.now()],
         'login_status': ['Success' if success else 'Failure']
     }
@@ -88,16 +87,16 @@ def authenticate_user(username, password):
 
     log_df.to_sql('login_log', con=engine, schema='streamlit_app_candidate', if_exists='append', index=False)
 
-    # Make sure username is stored in session state
+    # Make sure email is stored in session state
     if success:
-        st.session_state['username'] = username
+        st.session_state['email'] = email
 
     return success
 
-def log_activity(username, location_input, radius, user_lat, user_lon, total_results):
+def log_activity(email, location_input, radius, user_lat, user_lon, total_results):
     engine = get_db_connection()
     activity_data = {
-        'username': username,
+        'email': email,
         'location_input': location_input,
         'radius': radius,
         'user_lat': user_lat,
@@ -146,8 +145,7 @@ def send_resume_email(resume_file, user_df):
 
         # Attach the resume file to the email
         msg.attach(MIMEText("Hello, \n\nA new resume has been uploaded by the following user:<br> <br> " + "<b>First Name</b>: " + st.session_state['first_name'] +\
-                            "\n<br> <b>Last Name</b>: " + st.session_state['last_name'] + "<br> \n<b>Email</b>: " + st.session_state['email'] +\
-                            "\n<br> <b>Username</b>: " + st.session_state['username'] + "\n\n", 'html'))
+                            "\n<br> <b>Last Name</b>: " + st.session_state['last_name'] + "<br> \n<b>Email</b>: " + st.session_state['email'] + "\n\n", 'html'))
         attachment = MIMEBase('application', 'octet-stream')
         attachment.set_payload(resume_file.getvalue())
         encoders.encode_base64(attachment)
@@ -182,8 +180,6 @@ if 'authenticated' not in st.session_state:
         st.session_state['last_name'] = last_name
         email = st.sidebar.text_input("Email")
         st.session_state['email'] = email
-        username = st.sidebar.text_input("Username")
-        st.session_state['username'] = username
         password = st.sidebar.text_input("Password", type="password")
         st.session_state['password'] = password
         confirm_password = st.sidebar.text_input("Retype password", type="password")
@@ -191,43 +187,44 @@ if 'authenticated' not in st.session_state:
         if st.sidebar.button("Create Account"):
             if password != confirm_password:
                 st.error("Passwords do not match!")
-            elif create_account(username, password, first_name, last_name, email, user_df):
-                st.balloons()
-            elif first_name == "" or last_name == "" or email == "" or username == "" or password == "":
+            elif email in user_df['email'].values:
+                st.error("Email already exists")
+            elif first_name.strip(" ") == "" or last_name.strip(" ") == "" or\
+                 email.strip(" ") == "" or password.strip(" ") == "":
                 st.error("Please fill in all fields")
-            elif username in user_df['username'].values:
-                st.error("Username already exists")
+            elif create_account(email, password, first_name, last_name, user_df):
+                st.balloons()
             else:
                 st.error("Failed to create account")
             user_df = get_user_credentials()  # Replace direct call with cached function
 
     elif choice == "Login":
-        username = st.sidebar.text_input("Username")
+        email = st.sidebar.text_input("Email")
         password = st.sidebar.text_input("Password", type="password")
         if st.sidebar.button("Login"):
-            if authenticate_user(username, password):
+            if authenticate_user(email, password):
                 st.session_state['authenticated'] = True
                 st.balloons()
-                st.session_state['username'] = username
+                st.session_state['email'] = email
                 try:
-                    st.session_state['resume_uploaded'] = user_df[user_df['username'] == username]['resume_uploaded'].values[0]
+                    st.session_state['resume_uploaded'] = user_df[user_df['email'] == email]['resume_uploaded'].values[0]
                 except IndexError:
                     st.session_state['resume_uploaded'] = False
             # already authenticated
             elif st.session_state.get('authenticated'):
                 pass
             else:
-                st.error("Please check your username and password")
+                st.error("Please check your email and password")
 else:
-    username = st.session_state['username']
+    email = st.session_state['email']
     user_df = get_user_credentials()  # Replace direct call with cached function
-    st.write("#### Welcome, ", st.session_state["username"], " 👋")
+    st.write("#### Welcome, ", st.session_state["email"], " 👋")
 
-# st.write(st.session_state)
+st.write(st.session_state)
 
 # Display the rest of the page only if the user is authenticated
 if st.session_state.get('authenticated') and st.session_state['resume_uploaded']:
-    user_name = st.session_state["username"]
+    email = st.session_state["email"]
     st.divider()
 
     # Filtering and Processing Data for U.S. Mainland
@@ -305,7 +302,7 @@ if st.session_state.get('authenticated') and st.session_state['resume_uploaded']
         streamlit_folium.folium_static(folium_map, width=1300, height=500)
 
         # Log user activity
-        log_activity(username, user_location, radius_selected, user_lat, user_lon, us_mainland_df.shape[0])
+        log_activity(email, user_location, radius_selected, user_lat, user_lon, us_mainland_df.shape[0])
 
         with st.expander("View Nearby Practices"):
             us_mainland_df.reset_index(drop=True, inplace=True)
@@ -327,25 +324,24 @@ elif st.session_state.get('authenticated') and st.session_state['resume_uploaded
         existing_df = update_user_credentials()
 
         # Check if the current user is in user_df
-        if username not in existing_df['username'].values:
+        if email not in existing_df['email'].values:
             if user_df['id'].empty:
                 user_id = 1
             else:
                 user_id = user_df['id'].max() + 1
             user_data = {
                 'id': [user_id],
-                'username': [username],
+                'email': [st.session_state['email']],
                 'password': [hash_password(st.session_state['password'])],
                 'first_name': [st.session_state['first_name']],
                 'last_name': [st.session_state['last_name']],
-                'email': [st.session_state['email']],
                 'created_at': [pd.Timestamp.now()],
                 'resume_uploaded': [True]
             }
             row_df = pd.DataFrame(user_data)
             row_df.to_sql('user_credentials', con=engine, schema='streamlit_app_candidate', if_exists='append', index=False)
         else:
-            existing_df.loc[existing_df['username'] == username, 'resume_uploaded'] = True
+            existing_df.loc[existing_df['email'] == email, 'resume_uploaded'] = True
             existing_df.to_sql('user_credentials', con=engine, schema='streamlit_app_candidate', if_exists='replace', index=False)
         my_bar.progress(100)
         st.session_state['resume_uploaded'] = True
