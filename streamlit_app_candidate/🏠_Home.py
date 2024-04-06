@@ -39,7 +39,10 @@ def get_user_credentials_force_run():
 @st.cache_data(ttl=6000, max_entries=20, show_spinner=False, persist=False)  # Shorter `ttl` for potentially sensitive or frequently updated data
 def get_dso_practices():
     engine = get_db_connection()
-    return pd.read_sql("SELECT * FROM practice.dso", engine)
+    df = pd.read_sql("SELECT * FROM practice.dso", engine)
+    df.drop_duplicates(subset=['full_address'], inplace=True)
+    df.reset_index(drop=True, inplace=True)
+    return df
 
 def create_account(email, password, first_name, last_name, user_df):
     engine = get_db_connection()
@@ -134,7 +137,7 @@ def authenticate_with_google():
 def send_resume_email(resume_file, user_df):
     sender_email = "anddy0622@gmail.com"
     password = st.secrets["smtp_password"]
-    receiver_emails = ["anddy0622@gmail.com", "sean@scrubnetwork.com"]
+    receiver_emails = ["anddy0622@gmail.com"]#, "sean@scrubnetwork.com"]
 
     # Send email
     server = smtplib.SMTP('smtp.gmail.com', 587)
@@ -153,7 +156,7 @@ def send_resume_email(resume_file, user_df):
         attachment = MIMEBase('application', 'octet-stream')
         attachment.set_payload(resume_file.getvalue())
         encoders.encode_base64(attachment)
-        attachment.add_header('Content-Disposition', 'attachment', filename="resume.pdf")
+        attachment.add_header('Content-Disposition', 'attachment', filename=resume_file.name)
         msg.attach(attachment)
         server.sendmail(sender_email, receiver_email, msg.as_string())
     server.quit()
@@ -171,10 +174,39 @@ st.title("Scrub Network")
 
 engine = get_db_connection()
 df_dso_practices = get_dso_practices()  # Replace direct call with cached function
-user_df = get_user_credentials()  # Replace direct call with cached function
+# user_df = get_user_credentials()  # Replace direct call with cached function
 
 authenticated = False
 if 'authenticated' not in st.session_state:
+    # Description of the app and instructions
+    st.markdown("""
+    Welcome to Scrub Network! Tailor your dental career by filtering DSOs to find the right practices in your preferred location 🚀
+
+### How to Use the App
+1. **Sign Up/Login** 🔑
+   - Register or log in and upload your resume to access our full range of features.
+
+#####
+
+2. **Find DSO Clinics** 🗺️
+   - Search for DSO practices near you by entering your location.
+   - Adjust the search radius to find the best matches.
+
+#####
+
+3. **Explore and Connect** 🌱
+   - View detailed information about practices and available positions.
+   - Connect with practices to take the next step in your career.
+
+### Please Note
+- **Session Management:** Refreshing the page will log you out, but no worries, you can easily log back in and pick up where you left off!
+- **Privacy First:** Your data and privacy are of utmost importance to us. Rest assured, we handle your information with great care and confidentiality.
+
+#####
+
+Get started with Scrub Network and propel your dental career to new heights today! 🌟
+    """)
+
     menu = ["Login", "Create Account"]
     choice = st.sidebar.radio("Menu", menu, horizontal=True)
     if choice == "Create Account":
@@ -189,8 +221,11 @@ if 'authenticated' not in st.session_state:
         confirm_password = st.sidebar.text_input("Retype password", type="password")
 
         if st.sidebar.button("Create Account"):
+            user_df = get_user_credentials()  # Replace direct call with cached function
             if password != confirm_password:
                 st.error("Passwords do not match!")
+            elif '@' not in email or '.' not in email:
+                st.error("Invalid email address")
             elif email in user_df['email'].values:
                 st.error("Email already exists")
             elif first_name.strip(" ") == "" or last_name.strip(" ") == "" or\
@@ -205,8 +240,10 @@ if 'authenticated' not in st.session_state:
             authenticate_user(email, password)
             st.session_state['authenticated'] = True
             st.session_state["resume_uploaded"] = False
+            st.rerun()
 
     elif choice == "Login":
+        user_df = get_user_credentials()  # Replace direct call with cached function
         email = st.sidebar.text_input("Email")
         password = st.sidebar.text_input("Password", type="password")
         if st.sidebar.button("Login"):
@@ -223,6 +260,7 @@ if 'authenticated' not in st.session_state:
                 pass
             else:
                 st.error("Please check your email and password")
+            st.rerun()
 else:
     email = st.session_state['email']
     user_df = get_user_credentials()  # Replace direct call with cached function
@@ -232,9 +270,11 @@ else:
         first_name = st.session_state['first_name']
     st.write("#### Welcome, ", first_name.capitalize(), " 👋")
 
-user_df = get_user_credentials_force_run()  # Replace direct call with cached function
+
+# user_df = get_user_credentials_force_run()  # Replace direct call with cached function
 
 # Display the rest of the page only if the user is authenticated
+apply_button = False
 if st.session_state.get('authenticated') and st.session_state['resume_uploaded']:
     email = st.session_state["email"]
     st.divider()
@@ -255,7 +295,7 @@ if st.session_state.get('authenticated') and st.session_state['resume_uploaded']
     user_lat, user_lon = geocode_locations_using_google(user_location)
 
     # Radius Selection
-    radius_selected = st.slider("Select a radius (in miles)", min_value=0, max_value=100, value=50, step=1, key="radius")
+    radius_selected = st.slider("Search Radius (in miles)", min_value=0, max_value=100, value=50, step=1, key="radius")
 
     if user_lat is not None and user_lon is not None:
         us_mainland_df['distance_from_user'] = us_mainland_df.apply(
@@ -268,6 +308,7 @@ if st.session_state.get('authenticated') and st.session_state['resume_uploaded']
 
     # Create a unique color for each dso
     unique_dso = us_mainland_df['dso'].unique()
+    unique_dso = unique_dso[~pd.isnull(unique_dso)]
     distinct_colors = ["red", "blue", "green", "purple", "orange", "darkred", "lightred", "beige", "darkblue",\
                         "darkgreen", "cadetblue", "darkpurple", "white", "pink", "lightblue", "lightgreen", "gray"]
     dso_color_dict = dict(zip(unique_dso, distinct_colors))
@@ -279,7 +320,11 @@ if st.session_state.get('authenticated') and st.session_state['resume_uploaded']
     average_longitude = map_df['longitude'].dropna().mean()
 
     # Create true/false filter for dso color
-    dso_filter = st.multiselect("Filter by DSO", unique_dso, default=unique_dso)
+    filter_by_dso = st.checkbox("Filter by DSO Type", value=False)
+    if filter_by_dso:
+        dso_filter = st.multiselect("Filter by DSO Type", unique_dso, default=unique_dso)
+    else:
+        dso_filter = unique_dso
     us_mainland_df = us_mainland_df[us_mainland_df['dso'].isin(dso_filter)]
 
     try:
@@ -303,25 +348,68 @@ if st.session_state.get('authenticated') and st.session_state['resume_uploaded']
                 custom_popup = create_custom_popup_practice_search(row['name'], row['full_address'], row['phone'], row['site'],
                                                     row['rating'], row['reviews'], row['location_link'],
                                                     row['business_status'], row['dso'])
+                if filter_by_dso:
+                    color_param = row['color']
+                else:
+                    color_param = color_chooser(row['name'], row['full_address'], row['dso'])
                 Marker(
                     location=[row['latitude'], row['longitude']],
                     popup=custom_popup,
-                    # icon=Icon(color=color_chooser(row['name'], row['full_address'], row['dso'])),
-                    icon=Icon(color=row['color'])  # Assuming 'color' is defined in your DataFrame
+                    icon=Icon(color=color_param)  # Assuming 'color' is defined in your DataFrame
                 ).add_to(folium_map)
 
-        # Display the map in Streamlit
-        streamlit_folium.folium_static(folium_map, width=1300, height=500)
+        st.write("# ")
+        # if apply_button == False:
+        apply_button = st.button("Apply", type="primary")
 
-        # Log user activity
-        log_activity(email, user_location, radius_selected, user_lat, user_lon, us_mainland_df.shape[0])
+        def make_clickable(link):
+            # target _blank to open new window
+            # extract clickable text to display for your link
+            text = link.split('=')[1]
+            return f'<a target="_blank" href="{link}">{text}</a>'
 
-        with st.expander("View Nearby Practices"):
+        # if apply_button:
+        #     pass
+        with st.spinner("Loading map..."):
+            # Display the map in Streamlit
+            streamlit_folium.folium_static(folium_map, width=1300, height=500)
+
+            # Log user activity
+            log_activity(email, user_location, radius_selected, user_lat, user_lon, us_mainland_df.shape[0])
+        
             us_mainland_df.reset_index(drop=True, inplace=True)
             us_mainland_df = us_mainland_df[["name", "full_address", "phone", "site", "rating",
-                                             "reviews", "location_link", "business_status", "dso",
-                                             "distance_from_user"]]
-            st.data_editor(us_mainland_df, key="nearby_practices")
+                                                "reviews", "location_link", "business_status", "dso",
+                                                "distance_from_user"]]
+            us_mainland_df["distance_from_user"] = us_mainland_df["distance_from_user"].round()
+            st.data_editor(
+                    us_mainland_df,
+                    column_config={
+                        "name": "Practice Name",
+                        "rating": st.column_config.NumberColumn(
+                            "rating",
+                            help="Number of stars on GitHub",
+                            format="%f ⭐",
+                        ),
+                        "site": st.column_config.LinkColumn(
+                            "site", width="medium", display_text="Visit Website"
+                        ),
+                        "location_link": st.column_config.LinkColumn(
+                            "location_link", width="medium"
+                        ),
+                        "distance_from_user": st.column_config.LineChartColumn(
+                            "distance_from_user", y_min=0, y_max=int(radius_selected)
+                        ),
+                        "distance_from_user": st.column_config.ProgressColumn(
+                            "Distance from User",
+                            format="%f miles",
+                            min_value=0,
+                            max_value=int(radius_selected),
+                        ),
+                    },
+                    hide_index=True,
+                )
+
 
 elif st.session_state.get('authenticated') and st.session_state['resume_uploaded'] == False:
     st.write("# ")
