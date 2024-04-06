@@ -383,6 +383,9 @@ if st.session_state.get('authenticated') and st.session_state['resume_uploaded']
                 us_mainland_df["distance_from_user"] = us_mainland_df["distance_from_user"].round()
                 us_mainland_df["business_status"] = us_mainland_df["business_status"].apply(lambda x: "✅ OPERATIONAL" if x == "OPERATIONAL" else "⏸️ CLOSED_TEMPORARILY" if x == "CLOSED_TEMPORARILY" else "❌ CLOSED_PERMANENTLY")
 
+                # Sort the dataframe by distance from user
+                us_mainland_df.sort_values(by="distance_from_user", inplace=True)
+
                 st.dataframe(
                         us_mainland_df,
                         column_config={
