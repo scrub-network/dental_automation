@@ -412,7 +412,7 @@ if st.session_state.get('authenticated') and st.session_state['resume_uploaded']
                                 max_value=int(radius_selected),
                             ),
                             "dso": "DSO Type",
-                            "business_status": st.column_config.SelectColumn(
+                            "business_status": st.column_config.SelectboxColumn(
                                 "Business Status",
                                 options=["✅ OPERATIONAL", "⏸️ CLOSED_TEMPORARILY", "❌ CLOSED_PERMANENTLY"],
                             ),
