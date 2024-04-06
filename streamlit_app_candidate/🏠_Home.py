@@ -397,10 +397,10 @@ if st.session_state.get('authenticated') and st.session_state['resume_uploaded']
                                 format="%f reviews",
                             ),
                             "site": st.column_config.LinkColumn(
-                                "site", width="small", display_text="Visit Website"
+                                "site", width="medium", display_text="Visit Website"
                             ),
                             "location_link": st.column_config.LinkColumn(
-                                "location_link", width="small", display_text="View on Google Maps"
+                                "location_link", width="medium", display_text="View on Google Maps"
                             ),
                             "distance_from_user": st.column_config.LineChartColumn(
                                 "distance_from_user", y_min=0, y_max=int(radius_selected)
