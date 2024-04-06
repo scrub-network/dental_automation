@@ -16,6 +16,7 @@ from email.mime.base import MIMEBase
 from email import encoders
 
 import json
+import re
 
 # Function to hash passwords
 def hash_password(password):
@@ -27,12 +28,8 @@ def get_db_connection():
     engine = create_engine(db_uri)
     return engine
 
-@st.cache_data(ttl=600, max_entries=20, show_spinner=False, persist=False)  # Shorter `ttl` for potentially sensitive or frequently updated data
+@st.cache_data(ttl=30, max_entries=20, show_spinner=False, persist=False)  # Shorter `ttl` for potentially sensitive or frequently updated data
 def get_user_credentials():
-    engine = get_db_connection()
-    return pd.read_sql("SELECT * FROM streamlit_app_candidate.user_credentials", engine)
-
-def get_user_credentials_force_run():
     engine = get_db_connection()
     return pd.read_sql("SELECT * FROM streamlit_app_candidate.user_credentials", engine)
 
@@ -168,6 +165,13 @@ def update_user_credentials():
     user_existing_df = pd.read_sql("SELECT * FROM streamlit_app_candidate.user_credentials", engine)
     return user_existing_df
 
+def validate_email(email):
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if re.match(pattern, email):
+        return True
+    return False
+
+
 # Streamlit UI for account creation and login
 st.set_page_config(page_title="DSO", page_icon=":tooth:", layout="wide")
 st.title("Scrub Network")
@@ -223,24 +227,28 @@ Get started with Scrub Network and propel your dental career to new heights toda
         if st.sidebar.button("Create Account"):
             user_df = get_user_credentials()  # Replace direct call with cached function
             if password != confirm_password:
-                st.error("Passwords do not match!")
-            elif '@' not in email or '.' not in email:
-                st.error("Invalid email address")
+                with st.sidebar:
+                    st.error("Passwords do not match!")
+            elif not validate_email(email):
+                with st.sidebar:
+                    st.error("Invalid email address")
             elif email in user_df['email'].values:
-                st.error("Email already exists")
+                with st.sidebar:
+                    st.error("Email already exists")
             elif first_name.strip(" ") == "" or last_name.strip(" ") == "" or\
                  email.strip(" ") == "" or password.strip(" ") == "":
-                st.error("Please fill in all fields")
+                with st.sidebar:
+                    st.error("Please fill in all fields")
             elif create_account(email, password, first_name, last_name, user_df):
-                st.balloons()
+                # Direct user to login page
+                if authenticate_user(email, password):
+                    st.session_state['authenticated'] = True
+                    st.session_state["resume_uploaded"] = False
+                    st.rerun()
+                    st.write("#### Welcome, ", first_name.capitalize(), " 👋")
             else:
-                st.error("Failed to create account")
-            user_df = get_user_credentials()  # Replace direct call with cached function
-            # Direct user to login page
-            authenticate_user(email, password)
-            st.session_state['authenticated'] = True
-            st.session_state["resume_uploaded"] = False
-            st.rerun()
+                with st.sidebar:
+                    st.error("Failed to create account")
 
     elif choice == "Login":
         user_df = get_user_credentials()  # Replace direct call with cached function
@@ -249,30 +257,24 @@ Get started with Scrub Network and propel your dental career to new heights toda
         if st.sidebar.button("Login"):
             if authenticate_user(email, password):
                 st.session_state['authenticated'] = True
-                st.balloons()
                 st.session_state['email'] = email
+                st.session_state['first_name'] = user_df[user_df['email'] == email]['first_name'].values[0]
+                st.session_state['last_name'] = user_df[user_df['email'] == email]['last_name'].values[0]
                 try:
                     st.session_state['resume_uploaded'] = user_df[user_df['email'] == email]['resume_uploaded'].values[0]
                 except IndexError:
                     st.session_state['resume_uploaded'] = False
+                st.rerun()
+                st.write("#### Welcome, ", first_name.capitalize(), " 👋")
             # already authenticated
             elif st.session_state.get('authenticated'):
                 pass
             else:
-                st.error("Please check your email and password")
-            st.rerun()
-else:
-    email = st.session_state['email']
-    user_df = get_user_credentials()  # Replace direct call with cached function
-    try:
-        first_name = user_df[user_df['email'] == email]['first_name'].values[0]
-    except:
-        first_name = st.session_state['first_name']
-    st.write("#### Welcome, ", first_name.capitalize(), " 👋")
+                # Error on the sidebar
+                with st.sidebar:
+                    st.error("Please check your credentials")
 
-
-# user_df = get_user_credentials_force_run()  # Replace direct call with cached function
-
+user_df = get_user_credentials()  # Replace direct call with cached function
 # Display the rest of the page only if the user is authenticated
 apply_button = False
 if st.session_state.get('authenticated') and st.session_state['resume_uploaded']:
@@ -359,73 +361,72 @@ if st.session_state.get('authenticated') and st.session_state['resume_uploaded']
                 ).add_to(folium_map)
 
         st.write("# ")
-        # if apply_button == False:
-        apply_button = st.button("Apply", type="primary")
 
-        def make_clickable(link):
-            # target _blank to open new window
-            # extract clickable text to display for your link
-            text = link.split('=')[1]
-            return f'<a target="_blank" href="{link}">{text}</a>'
+    apply_button = st.button("Apply 🚀", type="primary")
 
-        if apply_button:
-            with st.spinner("Loading map..."):
-                # Display the map in Streamlit
-                streamlit_folium.folium_static(folium_map, width=1300, height=500)
+    def make_clickable(link):
+        # target _blank to open new window
+        # extract clickable text to display for your link
+        text = link.split('=')[1]
+        return f'<a target="_blank" href="{link}">{text}</a>'
 
-                # Log user activity
-                log_activity(email, user_location, radius_selected, user_lat, user_lon, us_mainland_df.shape[0])
-            
-                us_mainland_df.reset_index(drop=True, inplace=True)
-                us_mainland_df = us_mainland_df[["name", "street", "city", "state", "phone", "site", "rating",
-                                                    "reviews", "location_link", "business_status", "dso",
-                                                    "distance_from_user"]]
-                us_mainland_df["distance_from_user"] = us_mainland_df["distance_from_user"].round()
-                us_mainland_df["business_status"] = us_mainland_df["business_status"].apply(lambda x: "✅ OPERATIONAL" if x == "OPERATIONAL" else "⏸️ CLOSED_TEMPORARILY" if x == "CLOSED_TEMPORARILY" else "❌ CLOSED_PERMANENTLY")
+    if apply_button:
+        with st.spinner("Loading map..."):
+            # Display the map in Streamlit
+            streamlit_folium.folium_static(folium_map, width=1300, height=500)
 
-                # Sort the dataframe by distance from user
-                us_mainland_df.sort_values(by="distance_from_user", inplace=True)
+            # Log user activity
+            log_activity(email, user_location, radius_selected, user_lat, user_lon, us_mainland_df.shape[0])
+        
+            us_mainland_df.reset_index(drop=True, inplace=True)
+            us_mainland_df = us_mainland_df[["name", "street", "city", "state", "phone", "site", "rating",
+                                                "reviews", "location_link", "business_status", "dso",
+                                                "distance_from_user"]]
+            us_mainland_df["distance_from_user"] = us_mainland_df["distance_from_user"].round()
+            us_mainland_df["business_status"] = us_mainland_df["business_status"].apply(lambda x: "✅ OPERATIONAL" if x == "OPERATIONAL" else "⏸️ CLOSED_TEMPORARILY" if x == "CLOSED_TEMPORARILY" else "❌ CLOSED_PERMANENTLY")
 
-                st.dataframe(
-                        us_mainland_df,
-                        column_config={
-                            "name": "Practice Name",
-                            "rating": st.column_config.NumberColumn(
-                                "Rating",
-                                format="%f ⭐",
-                            ),
-                            "street": "Street Address",
-                            "city": "City",
-                            "state": "State",
-                            "phone": "Phone",
-                            "reviews": st.column_config.NumberColumn(
-                                "Reviews",
-                                format="%f reviews",
-                            ),
-                            "site": st.column_config.LinkColumn(
-                                "site", width="medium", display_text="Visit Website"
-                            ),
-                            "location_link": st.column_config.LinkColumn(
-                                "location_link", width="medium", display_text="View on Google Maps"
-                            ),
-                            "distance_from_user": st.column_config.LineChartColumn(
-                                "distance_from_user", y_min=0, y_max=int(radius_selected)
-                            ),
-                            "distance_from_user": st.column_config.ProgressColumn(
-                                "Distance from User",
-                                format="%f miles",
-                                min_value=0,
-                                max_value=int(radius_selected),
-                            ),
-                            "dso": "DSO Type",
-                            "business_status": st.column_config.SelectboxColumn(
-                                "Business Status",
-                                options=["✅ OPERATIONAL", "⏸️ CLOSED_TEMPORARILY", "❌ CLOSED_PERMANENTLY"],
-                            ),
-                        },
-                        hide_index=True,
-                    )
+            # Sort the dataframe by distance from user
+            us_mainland_df.sort_values(by="distance_from_user", inplace=True)
 
+            st.dataframe(
+                    us_mainland_df,
+                    column_config={
+                        "name": "Practice Name",
+                        "rating": st.column_config.NumberColumn(
+                            "Rating",
+                            format="%f ⭐",
+                        ),
+                        "street": "Street Address",
+                        "city": "City",
+                        "state": "State",
+                        "phone": "Phone",
+                        "reviews": st.column_config.NumberColumn(
+                            "Reviews",
+                            format="%f reviews",
+                        ),
+                        "site": st.column_config.LinkColumn(
+                            "site", width="medium", display_text="Visit Website"
+                        ),
+                        "location_link": st.column_config.LinkColumn(
+                            "location_link", width="medium", display_text="View on Google Maps"
+                        ),
+                        "distance_from_user": st.column_config.LineChartColumn(
+                            "distance_from_user", y_min=0, y_max=int(radius_selected)
+                        ),
+                        "distance_from_user": st.column_config.ProgressColumn(
+                            "Distance from User",
+                            format="%f miles",
+                            min_value=0,
+                            max_value=int(radius_selected),
+                        ),
+                        "dso": "DSO Type",
+                        "business_status": st.column_config.SelectboxColumn(
+                            "Business Status",
+                            options=["✅ OPERATIONAL", "⏸️ CLOSED_TEMPORARILY", "❌ CLOSED_PERMANENTLY"],
+                        ),
+                    },
+                    hide_index=True,
+                )
 
 elif st.session_state.get('authenticated') and st.session_state['resume_uploaded'] == False:
     st.write("# ")
@@ -438,6 +439,7 @@ elif st.session_state.get('authenticated') and st.session_state['resume_uploaded
         my_bar.progress(60, "Please wait while we process your resume")
 
         existing_df = update_user_credentials()
+        email = st.session_state['email']
 
         # Check if the current user is in user_df
         if email not in existing_df['email'].values and email != st.session_state['email']:
