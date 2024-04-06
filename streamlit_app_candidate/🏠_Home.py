@@ -392,7 +392,7 @@ if st.session_state.get('authenticated') and st.session_state['resume_uploaded']
                             ),
                             "full_address": "Address",
                             "phone": "Phone",
-                            reviews: st.column_config.NumberColumn(
+                            "reviews": st.column_config.NumberColumn(
                                 "Reviews",
                                 format="%f reviews",
                             ),
