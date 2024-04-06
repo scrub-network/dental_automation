@@ -368,47 +368,57 @@ if st.session_state.get('authenticated') and st.session_state['resume_uploaded']
             text = link.split('=')[1]
             return f'<a target="_blank" href="{link}">{text}</a>'
 
-        # if apply_button:
-        #     pass
-        with st.spinner("Loading map..."):
-            # Display the map in Streamlit
-            streamlit_folium.folium_static(folium_map, width=1300, height=500)
+        if apply_button:
+            with st.spinner("Loading map..."):
+                # Display the map in Streamlit
+                streamlit_folium.folium_static(folium_map, width=1300, height=500)
 
-            # Log user activity
-            log_activity(email, user_location, radius_selected, user_lat, user_lon, us_mainland_df.shape[0])
-        
-            us_mainland_df.reset_index(drop=True, inplace=True)
-            us_mainland_df = us_mainland_df[["name", "full_address", "phone", "site", "rating",
-                                                "reviews", "location_link", "business_status", "dso",
-                                                "distance_from_user"]]
-            us_mainland_df["distance_from_user"] = us_mainland_df["distance_from_user"].round()
-            st.data_editor(
-                    us_mainland_df,
-                    column_config={
-                        "name": "Practice Name",
-                        "rating": st.column_config.NumberColumn(
-                            "rating",
-                            help="Number of stars on GitHub",
-                            format="%f ⭐",
-                        ),
-                        "site": st.column_config.LinkColumn(
-                            "site", width="medium", display_text="Visit Website"
-                        ),
-                        "location_link": st.column_config.LinkColumn(
-                            "location_link", width="medium"
-                        ),
-                        "distance_from_user": st.column_config.LineChartColumn(
-                            "distance_from_user", y_min=0, y_max=int(radius_selected)
-                        ),
-                        "distance_from_user": st.column_config.ProgressColumn(
-                            "Distance from User",
-                            format="%f miles",
-                            min_value=0,
-                            max_value=int(radius_selected),
-                        ),
-                    },
-                    hide_index=True,
-                )
+                # Log user activity
+                log_activity(email, user_location, radius_selected, user_lat, user_lon, us_mainland_df.shape[0])
+            
+                us_mainland_df.reset_index(drop=True, inplace=True)
+                us_mainland_df = us_mainland_df[["name", "full_address", "phone", "site", "rating",
+                                                    "reviews", "location_link", "business_status", "dso",
+                                                    "distance_from_user"]]
+                us_mainland_df["distance_from_user"] = us_mainland_df["distance_from_user"].round()
+                us_mainland_df["business_status"] = us_mainland_df["business_status"].apply(lambda x: "✅ OPERATIONAL" if x == "OPERATIONAL" else "⏸️ CLOSED_TEMPORARILY" if x == "CLOSED_TEMPORARILY" else "❌ CLOSED_PERMANENTLY")
+                st.dataframe(
+                        us_mainland_df,
+                        column_config={
+                            "name": "Practice Name",
+                            "rating": st.column_config.NumberColumn(
+                                "Rating",
+                                format="%f ⭐",
+                            ),
+                            "full_address": "Address",
+                            "phone": "Phone",
+                            reviews: st.column_config.NumberColumn(
+                                "Reviews",
+                                format="%f reviews",
+                            ),
+                            "site": st.column_config.LinkColumn(
+                                "site", width="small", display_text="Visit Website"
+                            ),
+                            "location_link": st.column_config.LinkColumn(
+                                "location_link", width="small", display_text="View on Google Maps"
+                            ),
+                            "distance_from_user": st.column_config.LineChartColumn(
+                                "distance_from_user", y_min=0, y_max=int(radius_selected)
+                            ),
+                            "distance_from_user": st.column_config.ProgressColumn(
+                                "Distance from User",
+                                format="%f miles",
+                                min_value=0,
+                                max_value=int(radius_selected),
+                            ),
+                            "dso": "DSO Type",
+                            "business_status": st.column_config.SelectColumn(
+                                "Business Status",
+                                options=["✅ OPERATIONAL", "⏸️ CLOSED_TEMPORARILY", "❌ CLOSED_PERMANENTLY"],
+                            ),
+                        },
+                        hide_index=True,
+                    )
 
 
 elif st.session_state.get('authenticated') and st.session_state['resume_uploaded'] == False:
