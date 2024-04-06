@@ -382,6 +382,12 @@ if st.session_state.get('authenticated') and st.session_state['resume_uploaded']
                                                     "distance_from_user"]]
                 us_mainland_df["distance_from_user"] = us_mainland_df["distance_from_user"].round()
                 us_mainland_df["business_status"] = us_mainland_df["business_status"].apply(lambda x: "✅ OPERATIONAL" if x == "OPERATIONAL" else "⏸️ CLOSED_TEMPORARILY" if x == "CLOSED_TEMPORARILY" else "❌ CLOSED_PERMANENTLY")
+                # Split address into street address, city, and state
+                us_mainland_df[['street_address', 'city', 'state']] = us_mainland_df['full_address'].str.split(',', expand=True)
+                us_mainland_df['street_address'] = us_mainland_df['street_address'].str.strip()
+                us_mainland_df['city'] = us_mainland_df['city'].str.strip()
+                us_mainland_df['state'] = us_mainland_df['state'].str.split(' ').str[0]
+
                 st.dataframe(
                         us_mainland_df,
                         column_config={
@@ -390,7 +396,9 @@ if st.session_state.get('authenticated') and st.session_state['resume_uploaded']
                                 "Rating",
                                 format="%f ⭐",
                             ),
-                            "full_address": "Address",
+                            "street_address": "Street Address",
+                            "city": "City",
+                            "state": "State",
                             "phone": "Phone",
                             "reviews": st.column_config.NumberColumn(
                                 "Reviews",
