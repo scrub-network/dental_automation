@@ -219,6 +219,7 @@ Get started with Scrub Network and propel your dental career to new heights toda
         last_name = st.sidebar.text_input("Last Name")
         st.session_state['last_name'] = last_name
         email = st.sidebar.text_input("Email")
+        email = email.lower()
         st.session_state['email'] = email
         password = st.sidebar.text_input("Password", type="password")
         st.session_state['password'] = password
@@ -253,6 +254,7 @@ Get started with Scrub Network and propel your dental career to new heights toda
     elif choice == "Login":
         user_df = get_user_credentials()  # Replace direct call with cached function
         email = st.sidebar.text_input("Email")
+        email = email.lower()
         password = st.sidebar.text_input("Password", type="password")
         if st.sidebar.button("Login"):
             if authenticate_user(email, password):
@@ -296,6 +298,9 @@ if st.session_state.get('authenticated') and st.session_state['resume_uploaded']
     user_location = st.text_input("Enter your full_address or zip code:")
     user_lat, user_lon = geocode_locations_using_google(user_location)
 
+    if user_lat is None and user_lon is None and user_location != "" and user_location is not None:
+        st.error("Invalid location. Please enter a valid address or zip code.")
+
     # Radius Selection
     radius_selected = st.slider("Search Radius (in miles)", min_value=0, max_value=100, value=50, step=1, key="radius")
 
@@ -307,6 +312,11 @@ if st.session_state.get('authenticated') and st.session_state['resume_uploaded']
         zoom = 9.5
     else:
         zoom = 4.4
+
+    # # See if there is at least one practice within the radius
+    # practices_within_radius = us_mainland_df[us_mainland_df['distance_from_user'] <= radius_selected]
+    # if us_mainland_df.shape[0] == 0:
+    #     st.write("No practices found within the specified radius. Please try again with a different location or radius.")
 
     # Create a unique color for each dso
     unique_dso = us_mainland_df['dso'].unique()
@@ -370,7 +380,9 @@ if st.session_state.get('authenticated') and st.session_state['resume_uploaded']
         text = link.split('=')[1]
         return f'<a target="_blank" href="{link}">{text}</a>'
 
-    if apply_button:
+    print(us_mainland_df.columns)
+
+    if apply_button and "distance_from_user" in us_mainland_df.columns:
         with st.spinner("Loading map..."):
             # Display the map in Streamlit
             streamlit_folium.folium_static(folium_map, width=1300, height=500)
