@@ -1,9 +1,10 @@
-# Local Testing Folders
+# Local Testing and Scraping Folders
 /compensation_dashboard
 /cron_automation
 /scrape_test
 /selenium_scrape
 /canvas
+/dso_job_scrape
 
 # Unnecesary files
 /streamlit_app/pages/__pycache__

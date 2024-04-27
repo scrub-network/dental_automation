@@ -36,8 +36,11 @@ def get_user_credentials():
 @st.cache_data(ttl=6000, max_entries=20, show_spinner=False, persist=False)  # Shorter `ttl` for potentially sensitive or frequently updated data
 def get_dso_practices():
     engine = get_db_connection()
-    df = pd.read_sql("SELECT * FROM practice.dso", engine)
-    df.drop_duplicates(subset=['full_address'], inplace=True)
+    exclude_types = """('Coffee shop', 'Elementary school', 'Shipping and mailing service',
+                        'Movie theater', 'Hotel', 'Bus station', 'Stadium',
+                        'Apartment building', 'Hotel')"""
+    df = pd.read_sql(f"SELECT * FROM practice.dso where type not in {exclude_types}", engine)
+    df.drop_duplicates(subset=['full_address', 'name'], inplace=True)
     df.reset_index(drop=True, inplace=True)
     return df
 
